@@ -1,0 +1,24 @@
+{
+	"schemaVersion": 1,
+	"id": "sayitmc",
+	"version": "${version}",
+	"name": "Say It!",
+	"description": "Learn a language while you play: every new item you pick up has to be said out loud in the language you are learning. Non-Latin words get an English-style pronunciation subtitle.",
+	"authors": [
+		"kermenglee"
+	],
+	"license": "MIT",
+	"icon": "assets/sayitmc/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.sayitmc.SayItClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

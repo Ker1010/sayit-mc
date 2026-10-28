@@ -1,0 +1,10 @@
+{
+	"sayitmc.hud.header": "SAY IT IN %s",
+	"sayitmc.hud.listening": "listening...",
+	"sayitmc.hud.heard": "heard: %s",
+	"sayitmc.hud.correct": "✔ Correct!",
+	"sayitmc.hud.timeout": "✘ Time's up!",
+	"sayitmc.hud.downloading": "downloading speech model %s%%",
+	"sayitmc.hud.loading": "loading speech model...",
+	"sayitmc.hud.flashcard": "no speech check: %s"
+}

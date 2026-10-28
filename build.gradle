@@ -1,0 +1,61 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+base {
+	archivesName = 'sayit-mc'
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// Offline speech recognition. JNA is left out because Minecraft already ships it.
+	include(implementation("com.alphacephei:vosk:${project.vosk_version}") {
+		exclude group: 'net.java.dev.jna'
+	})
+	// Japanese kanji -> kana readings, used for romaji subtitles and answer matching.
+	include(implementation("com.atilika.kuromoji:kuromoji-ipadic:${project.kuromoji_version}"))
+	include("com.atilika.kuromoji:kuromoji-core:${project.kuromoji_version}")
+	// Transliteration of every other non-Latin script (Chinese pinyin, Hangul, Cyrillic, Greek, Arabic, Thai...).
+	include(implementation("com.ibm.icu:icu4j:${project.icu4j_version}"))
+
+	testImplementation "org.junit.jupiter:junit-jupiter:${project.junit_version}"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+test {
+	useJUnitPlatform()
+}
+
+jar {
+	def projectName = project.name
+	inputs.property "projectName", projectName
+
+	from("LICENSE") {
+		rename { "${it}_$projectName" }
+	}
+}
