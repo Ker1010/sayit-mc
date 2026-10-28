@@ -117,5 +117,6 @@ and their items are never cleared. Players can add any [Vosk model](https://alph
 ./gradlew build
 ```
 
-The jar is written to `build/libs/`. GitHub Actions builds it on every push (see the *Actions* tab → *Build* →
-artifact `sayit-mc`). Unit tests for the game rules, romanizer and answer matching: `./gradlew test`.
+The jar is written to `build/libs/`. GitHub Actions builds it on every push (*Actions* tab → *Build* → artifact
+`sayit-mc`), and pushing a version tag (`git tag v0.3.0 && git push origin v0.3.0`) publishes it on the *Releases* page.
+Unit tests for the game rules, romanizer and answer matching: `./gradlew test`.
