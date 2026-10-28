@@ -29,6 +29,7 @@ public final class ListenSession implements AutoCloseable {
 	/** Vosk models are trained on 16 kHz, but it resamples, so fall back to what the microphone supports. */
 	private static final float[] SAMPLE_RATES = {16000f, 48000f, 44100f};
 	private static final int ALTERNATIVES = 3;
+	private static final long LOST_AFTER_MILLIS = 2000;
 
 	private final TargetDataLine line;
 	private final Recognizer free;
@@ -44,6 +45,8 @@ public final class ListenSession implements AutoCloseable {
 	private volatile boolean running = true;
 	private volatile boolean clearRequested;
 	private volatile boolean finished;
+	/** The microphone stopped delivering sound (unplugged, or the device failed). */
+	private volatile boolean lost;
 
 	private ListenSession(TargetDataLine line, Recognizer free, Recognizer limited, double minConfidence) {
 		this.line = line;
@@ -116,6 +119,11 @@ public final class ListenSession implements AutoCloseable {
 		return List.copyOf(candidates);
 	}
 
+	/** True when the microphone went away mid-word, so the answer has to be given another way. */
+	public boolean isLost() {
+		return lost;
+	}
+
 	/** True once the microphone is released and the last words have been flushed into {@link #heard()}. */
 	public boolean isFinished() {
 		return finished;
@@ -140,6 +148,7 @@ public final class ListenSession implements AutoCloseable {
 
 		try {
 			line.start();
+			long lastSound = System.currentTimeMillis();
 
 			while (running) {
 				int read = line.read(buffer, 0, buffer.length);
@@ -159,8 +168,17 @@ public final class ListenSession implements AutoCloseable {
 				}
 
 				if (read <= 0) {
+					// An unplugged microphone returns nothing at all, not silence.
+					if (System.currentTimeMillis() - lastSound > LOST_AFTER_MILLIS) {
+						lost = true;
+						break;
+					}
+
+					Thread.sleep(10);
 					continue;
 				}
+
+				lastSound = System.currentTimeMillis();
 
 				if (free.acceptWaveForm(buffer, read)) {
 					addFreeResult(free.getResult());
@@ -181,6 +199,7 @@ public final class ListenSession implements AutoCloseable {
 			}
 		} catch (Throwable t) {
 			SayItMod.LOGGER.warn("Speech recognition stopped", t);
+			lost = true;
 		} finally {
 			line.stop();
 			line.close();

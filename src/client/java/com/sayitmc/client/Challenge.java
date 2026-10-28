@@ -127,6 +127,11 @@ public final class Challenge {
 			case LISTENING -> {
 				checkAnswer(config, now);
 
+				if (phase == Phase.LISTENING && session.isLost()) {
+					// Microphone unplugged mid-word: finish this one as a quiz on the same clock.
+					switchToQuiz("microphone disconnected", phaseStart, now);
+				}
+
 				if (phase == Phase.LISTENING && now - phaseStart >= answerMillis) {
 					session.close();
 					enter(Phase.CHECKING, now);
@@ -326,11 +331,18 @@ public final class Challenge {
 
 	/** Without speech the player picks the word from three; the server clock starts now. */
 	private void startQuiz(String reason, long now) {
+		if (switchToQuiz(reason, now, now) && isServerGame()) {
+			ClientPlayNetworking.send(new SayItPayloads.Listening(serverId, word));
+		}
+	}
+
+	/** Shows the quiz, keeping the clock that started at {@code clockStart}; false if it fell back to a flashcard. */
+	private boolean switchToQuiz(String reason, long clockStart, long now) {
 		List<String> picks = QuizOptions.build(word, languageCode, new Random());
 
 		if (picks == null) {
 			showFlashcard(reason, now);
-			return;
+			return false;
 		}
 
 		List<String> subtitles = new ArrayList<>();
@@ -342,11 +354,8 @@ public final class Challenge {
 		options = picks;
 		optionSubtitles = subtitles;
 		note = reason;
-		enter(Phase.QUIZ, now);
-
-		if (isServerGame()) {
-			ClientPlayNetworking.send(new SayItPayloads.Listening(serverId, word));
-		}
+		enter(Phase.QUIZ, clockStart);
+		return true;
 	}
 
 	private void showFlashcard(String reason, long now) {
