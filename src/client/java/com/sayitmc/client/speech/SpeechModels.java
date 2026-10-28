@@ -15,6 +15,8 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.DoubleConsumer;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -26,6 +28,8 @@ import com.sayitmc.text.Romanizer;
 /** Knows which Vosk model serves each language, and downloads + unpacks it on first use. */
 public final class SpeechModels {
 	private static final String BASE_URL = "https://alphacephei.com/vosk/models/";
+	/** A download that receives nothing for this long is given up (and retried later by the speech service). */
+	private static final long STALL_MILLIS = 30_000;
 
 	/** Small (~40-50 MB) models from https://alphacephei.com/vosk/models, keyed by language prefix. */
 	private static final Map<String, String> SMALL_MODELS = Map.ofEntries(
@@ -94,13 +98,14 @@ public final class SpeechModels {
 		}
 	}
 
+	@SuppressWarnings("try") // the watchdog closes the stream on purpose
 	private static void download(String url, Path destination, DoubleConsumer progress) throws IOException, InterruptedException {
 		HttpClient client = HttpClient.newBuilder()
 				.followRedirects(HttpClient.Redirect.NORMAL)
 				.proxy(ProxySelector.getDefault())
 				.connectTimeout(Duration.ofSeconds(20))
 				.build();
-		HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().build();
+		HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30)).GET().build();
 		HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
 		if (response.statusCode() != 200) {
@@ -109,20 +114,47 @@ public final class SpeechModels {
 		}
 
 		long total = response.headers().firstValueAsLong("Content-Length").orElse(-1);
+		AtomicLong lastData = new AtomicLong(System.currentTimeMillis());
+		AtomicBoolean stalled = new AtomicBoolean();
+		long done = 0;
 
 		try (InputStream in = response.body(); OutputStream out = Files.newOutputStream(destination)) {
-			byte[] buffer = new byte[64 * 1024];
-			long done = 0;
-			int read;
+			// Closing the stream is the only way to unblock a read on a connection that silently stopped.
+			Thread watchdog = Thread.ofVirtual().start(() -> {
+				try {
+					while (System.currentTimeMillis() - lastData.get() < STALL_MILLIS) {
+						Thread.sleep(1000);
+					}
 
-			while ((read = in.read(buffer)) >= 0) {
-				out.write(buffer, 0, read);
-				done += read;
-
-				if (total > 0) {
-					progress.accept((double) done / total);
+					stalled.set(true);
+					in.close();
+				} catch (InterruptedException | IOException ignored) {
+					// Download finished, or the stream is already closed.
 				}
+			});
+
+			try {
+				byte[] buffer = new byte[64 * 1024];
+				int read;
+
+				while ((read = in.read(buffer)) >= 0) {
+					lastData.set(System.currentTimeMillis());
+					out.write(buffer, 0, read);
+					done += read;
+
+					if (total > 0) {
+						progress.accept((double) done / total);
+					}
+				}
+			} finally {
+				watchdog.interrupt();
 			}
+		} catch (IOException e) {
+			throw stalled.get() ? new IOException("download stalled, will retry", e) : e;
+		}
+
+		if (stalled.get() || total > 0 && done < total) {
+			throw new IOException("download stalled, will retry");
 		}
 	}
 

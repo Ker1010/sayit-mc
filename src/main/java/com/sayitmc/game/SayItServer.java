@@ -14,12 +14,14 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.LevelResource;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -35,7 +37,11 @@ public final class SayItServer {
 	private final Map<UUID, PlayerGame> games = new HashMap<>();
 	/** When each online player joined, to find the ones whose client never says hello. */
 	private final Map<UUID, Long> joinedAt = new HashMap<>();
+	/** Item ids that appeared on the ground next to each player during this tick. */
+	private final Map<UUID, Set<String>> droppedThisTick = new HashMap<>();
 	private static final int HELLO_TIMEOUT_TICKS = 10 * 20;
+	/** A dropped item spawns at the player's eyes, so one appearing this close was dropped by them (or on death). */
+	private static final double DROP_DISTANCE_SQR = 3 * 3;
 
 	private ServerConfig config = new ServerConfig();
 	private LearnedStore learned;
@@ -56,6 +62,11 @@ public final class SayItServer {
 			joinedAt.remove(uuid(listener.player));
 		});
 		ServerTickEvents.END_SERVER_TICK.register(this::tick);
+		ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
+			if (entity instanceof ItemEntity item) {
+				noticeDrop(item);
+			}
+		});
 		CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> SayItAdminCommand.register(dispatcher, this));
 
 		ServerPlayNetworking.registerGlobalReceiver(SayItPayloads.Hello.TYPE, (payload, context) -> {
@@ -173,7 +184,24 @@ public final class SayItServer {
 				continue;
 			}
 
-			game.tick(ticks, heldItems(player), item -> learned.contains(id, language, item), config, actions(player));
+			Set<String> dropped = droppedThisTick.getOrDefault(id, Set.of());
+			game.tick(ticks, heldItems(player), item -> learned.contains(id, language, item), dropped::contains, config, actions(player));
+		}
+
+		droppedThisTick.clear();
+	}
+
+	private void noticeDrop(ItemEntity item) {
+		String itemId = id(item.getItem());
+
+		if (server == null || itemId == null || games.isEmpty()) {
+			return;
+		}
+
+		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+			if (games.containsKey(uuid(player)) && player.distanceToSqr(item) <= DROP_DISTANCE_SQR) {
+				droppedThisTick.computeIfAbsent(uuid(player), id -> new HashSet<>()).add(itemId);
+			}
 		}
 	}
 
@@ -196,6 +224,13 @@ public final class SayItServer {
 			@Override
 			public void clearItem(String itemId) {
 				removeAll(player, itemId);
+			}
+
+			@Override
+			public void clearStashedItem(String itemId) {
+				removeAll(player, itemId);
+				player.sendSystemMessage(Component.literal("Say It!: time ran out for " + itemId
+						+ " while you had it put away, so it was cleared. Only dropping an item on the ground resets its timer."));
 			}
 		};
 	}

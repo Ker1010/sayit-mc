@@ -33,7 +33,13 @@ class PlayerGameTest {
 		public void clearItem(String itemId) {
 			log.add("clear " + itemId);
 		}
+
+		@Override
+		public void clearStashedItem(String itemId) {
+			log.add("clear stashed " + itemId);
+		}
 	};
+	private final Set<String> dropped = new HashSet<>();
 	private long now;
 
 	@BeforeEach
@@ -72,7 +78,7 @@ class PlayerGameTest {
 		tick("minecraft:wheat");
 		game.listening(1, now);
 		advance(100, "minecraft:wheat");
-		tick();
+		drop("minecraft:wheat");
 		assertEquals("end 1 DROPPED", log.get(1));
 
 		// Picked up again: a fresh challenge with a full timer.
@@ -95,6 +101,31 @@ class PlayerGameTest {
 		tick("minecraft:wheat");
 		advance(TIMEOUT_TICKS * 2, "minecraft:wheat");
 		assertEquals(2, log.size());
+	}
+
+	@Test
+	void puttingTheItemAwayDoesNotSaveIt() {
+		tick("minecraft:wheat");
+		game.listening(1, now);
+		tick();
+		assertEquals(1, log.size(), "stashing (chest, bundle) does not reset the timer");
+
+		advance(TIMEOUT_TICKS);
+		assertEquals("end 1 CLEARED", log.get(1));
+
+		tick("minecraft:wheat");
+		assertEquals("clear stashed minecraft:wheat", log.get(2), "cleared as soon as it comes back");
+	}
+
+	@Test
+	void stashedItemThatComesBackInTimeKeepsItsTimer() {
+		tick("minecraft:wheat");
+		game.listening(1, now);
+		advance(50);
+		advance(50, "minecraft:wheat");
+		assertEquals(1, log.size());
+		advance(TIMEOUT_TICKS - 99, "minecraft:wheat");
+		assertEquals(List.of("start 1 minecraft:wheat 10", "clear minecraft:wheat", "end 1 CLEARED"), log);
 	}
 
 	@Test
@@ -146,7 +177,14 @@ class PlayerGameTest {
 
 	private void tick(String... held) {
 		now++;
-		game.tick(now, new HashSet<>(List.of(held)), learned::contains, config, actions);
+		game.tick(now, new HashSet<>(List.of(held)), learned::contains, dropped::contains, config, actions);
+		dropped.clear();
+	}
+
+	/** The player throws the item on the ground. */
+	private void drop(String itemId, String... stillHeld) {
+		dropped.add(itemId);
+		tick(stillHeld);
 	}
 
 	private void advance(int ticks, String... held) {

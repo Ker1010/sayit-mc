@@ -26,6 +26,11 @@ public final class ServerConfig {
 	public boolean includeCreativePlayers = false;
 	/** Also quiz what players carry when they join, not only items picked up later. */
 	public boolean quizItemsAlreadyInInventory = false;
+	/**
+	 * An unanswered item put away somewhere other than the ground (a chest, a bundle) is cleared when it comes back
+	 * into the inventory within this many minutes.
+	 */
+	public int rememberStashedItemsMinutes = 30;
 	/** How long to wait for a player's speech model to download before giving up on a challenge. */
 	public int waitForClientSeconds = 60;
 	/** Kick players whose client does not have the mod, and do not let anyone turn the game off. */
@@ -78,6 +83,7 @@ public final class ServerConfig {
 
 		secondsToAnswer = Math.clamp(secondsToAnswer, 3, 120);
 		waitForClientSeconds = Math.clamp(waitForClientSeconds, 5, 600);
+		rememberStashedItemsMinutes = Math.clamp(rememberStashedItemsMinutes, 0, 24 * 60);
 
 		if (requireModMessage == null || requireModMessage.isBlank()) {
 			requireModMessage = new ServerConfig().requireModMessage;

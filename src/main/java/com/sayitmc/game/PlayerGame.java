@@ -2,13 +2,16 @@ package com.sayitmc.game;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
  * One player's round of the game, server thread only: every new item they get must be said in the server's
- * language before its timer runs out, or it is cleared. Dropping the item stops (resets) its timer.
+ * language before its timer runs out, or it is cleared. Dropping the item on the ground stops (resets) its timer;
+ * putting it anywhere else (a chest, a bundle, the crafting grid) does not save it.
  */
 public final class PlayerGame {
 	/** What the game does to the player; backed by the real player on the server and by a fake in tests. */
@@ -18,6 +21,9 @@ public final class PlayerGame {
 		void endChallenge(int id, Outcome outcome);
 
 		void clearItem(String itemId);
+
+		/** A stashed item whose time ran out came back into the inventory. */
+		void clearStashedItem(String itemId);
 	}
 
 	/** Covers network delay and the recognizer finishing the last words. */
@@ -29,6 +35,8 @@ public final class PlayerGame {
 	private Set<String> previous;
 	private boolean enabled;
 	private Running running;
+	/** Items whose time ran out while stashed away, until when they are cleared on coming back. */
+	private final Map<String, Long> stashedOverdue = new HashMap<>();
 	private int nextId = 1;
 
 	private static final class Running {
@@ -61,19 +69,47 @@ public final class PlayerGame {
 	/**
 	 * @param held item ids currently in the player's inventory (including the stack on the cursor)
 	 * @param learned whether this player already learned an item in the server's language
+	 * @param droppedNow whether the player just dropped this item on the ground (or died)
 	 */
-	public void tick(long now, Set<String> held, Predicate<String> learned, ServerConfig config, Actions actions) {
+	public void tick(long now, Set<String> held, Predicate<String> learned, Predicate<String> droppedNow,
+			ServerConfig config, Actions actions) {
 		if (!isPlaying()) {
 			previous = null;
 			return;
 		}
 
+		stashedOverdue.values().removeIf(until -> until < now);
 		boolean baseline = previous == null;
+
+		if (!baseline) {
+			for (String id : previous) {
+				if (held.contains(id)) {
+					continue;
+				}
+
+				// Gone from the inventory. Only dropping it on the ground resets its timer.
+				boolean dropped = droppedNow.test(id);
+
+				if (isRunning(id)) {
+					if (dropped) {
+						finish(Outcome.DROPPED, actions);
+					}
+				} else if (queue.remove(id) && !dropped) {
+					stash(id, now, config);
+				}
+			}
+		}
 
 		for (String id : held) {
 			boolean isNew = baseline ? config.quizItemsAlreadyInInventory : !previous.contains(id);
 
-			if (isNew && !learned.test(id) && !queue.contains(id) && !isRunning(id) && queue.size() < MAX_QUEUED) {
+			if (!isNew || isRunning(id)) {
+				continue;
+			}
+
+			if (stashedOverdue.remove(id) != null) {
+				actions.clearStashedItem(id);
+			} else if (!learned.test(id) && !queue.contains(id) && queue.size() < MAX_QUEUED) {
 				queue.add(id);
 			}
 		}
@@ -81,16 +117,21 @@ public final class PlayerGame {
 		previous = held;
 
 		if (running != null) {
-			if (!held.contains(running.itemId)) {
-				finish(Outcome.DROPPED, actions);
-			} else if (!running.counting && now - running.since > config.waitForClientSeconds * 20L) {
+			boolean away = !held.contains(running.itemId);
+
+			if (!running.counting && now - running.since > config.waitForClientSeconds * 20L) {
 				finish(Outcome.CANCELLED, actions);
 			} else if (running.counting && now - running.since > config.secondsToAnswer * 20L + GRACE_TICKS) {
-				if (config.clearItemsOnTimeout) {
-					actions.clearItem(running.itemId);
-					finish(Outcome.CLEARED, actions);
-				} else {
+				if (!config.clearItemsOnTimeout) {
 					finish(Outcome.TIMED_OUT, actions);
+				} else {
+					if (away) {
+						stash(running.itemId, now, config);
+					} else {
+						actions.clearItem(running.itemId);
+					}
+
+					finish(Outcome.CLEARED, actions);
 				}
 			}
 		}
@@ -136,7 +177,15 @@ public final class PlayerGame {
 		}
 
 		queue.clear();
+		stashedOverdue.clear();
 		previous = null;
+	}
+
+	/** Remembers an item that left without being dropped, so it is cleared when it comes back. */
+	private void stash(String itemId, long now, ServerConfig config) {
+		if (config.clearItemsOnTimeout) {
+			stashedOverdue.put(itemId, now + config.rememberStashedItemsMinutes * 60L * 20L);
+		}
 	}
 
 	private boolean isRunning(String itemId) {

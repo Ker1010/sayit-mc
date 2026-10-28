@@ -16,7 +16,9 @@ A Fabric mod for **Minecraft Java 26.3**. Every time you get an item you have no
 
 - **Say it before the timer hits 0** → level-up sound, the item is learned and never asked again.
 - **Timer hits 0** → the item is **cleared** from your inventory. Pick it up again to get another try.
-- **Drop the item** (or put it in a chest) → its **timer resets**. When you pick it up again you get a fresh timer.
+- **Drop the item on the ground** (or die) → its **timer resets**. When you pick it up again you get a fresh timer.
+- Putting it in a chest, a bundle or the crafting grid does **not** help: the timer keeps running, and if it runs out
+  the item is cleared the moment it comes back into your inventory.
 - One word at a time; other new items wait their turn.
 - **The server picks the language** — everyone on it learns the same one, and players cannot change it.
 - **Every player plays for themselves**: their own microphone, their own timer, their own learned items.
@@ -82,6 +84,7 @@ Server rules — `config/sayitmc-server.json` on the server (or your own game fo
 | `includeCreativePlayers` | `false` | Also play in creative mode |
 | `quizItemsAlreadyInInventory` | `false` | Also ask for what players carry when they join |
 | `waitForClientSeconds` | `60` | How long to wait for a player's speech model download |
+| `rememberStashedItemsMinutes` | `30` | How long an item whose time ran out while stashed away stays marked for clearing |
 | `requireMod` | `true` | Kick players who join without the mod, and nobody can use `/sayit off` |
 | `requireModMessage` | | The message those players see when kicked |
 
