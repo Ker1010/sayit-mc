@@ -308,10 +308,10 @@ public final class SayItServer {
 				ServerPlayNetworking.send(player, new SayItPayloads.Result(id, outcome.ordinal()));
 				nameTags.flash(player, outcome, ticks);
 				int misses = countMiss(player, itemId, outcome);
-				int every = config.googleHintAfterMisses;
+				int sendhint = config.googleHintAfterMisses;
 				boolean spoken = !word.isEmpty() && !word.equals("?");
 
-				if (spoken && every > 0 && misses > 0 && misses % every == 0) {
+				if (spoken && every > 0 && misses > 0 && misses == sendhint) {
 					sendGoogleHint(player, word, misses);
 				}
 			}

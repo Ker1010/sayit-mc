@@ -16,7 +16,7 @@ import com.sayitmc.SayItMod;
 /** Rules of the game, stored in {@code config/sayitmc-server.json} on the server (or the singleplayer game). */
 public final class ServerConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-	private static final String DEFAULT_LANGUAGE = "de_de";
+	private static final String DEFAULT_LANGUAGE = "ja_jp";
 
 	/** Minecraft language code every player learns, e.g. de_de, ja_jp, zh_cn, ko_kr, fr_fr. Players cannot change it. */
 	public String language = DEFAULT_LANGUAGE;
