@@ -311,7 +311,7 @@ public final class SayItServer {
 				int sendhint = config.googleHintAfterMisses;
 				boolean spoken = !word.isEmpty() && !word.equals("?");
 
-				if (spoken && every > 0 && misses > 0 && misses == sendhint) {
+				if (spoken && misses > 0 && misses == sendhint) {
 					sendGoogleHint(player, word, misses);
 				}
 			}
