@@ -1,5 +1,7 @@
 package com.sayitmc.text;
 
+import java.util.List;
+
 /**
  * Fuzzy comparison between the expected word and what the speech recognizer heard.
  * Both inputs are {@link Romanizer#matchKey match keys}.
@@ -8,32 +10,41 @@ public final class AnswerMatcher {
 	private AnswerMatcher() {
 	}
 
-	public static boolean matches(String expected, String heard, double threshold) {
-		return !expected.isEmpty() && !heard.isEmpty() && bestSimilarity(expected, heard) >= threshold;
-	}
+	/** Answers this short (in match-key letters) must be heard exactly; one wrong sound is too much of them. */
+	static final int EXACT_UP_TO = 3;
 
 	/**
-	 * Similarity in [0, 1] between {@code expected} and the closest part of {@code heard},
-	 * so filler words around the answer ("uh weizen") do not count against the player.
+	 * Whether a run of whole heard words matches the expected word, so "uh weizen bitte" counts but a longer word
+	 * that merely contains the answer's sounds does not.
+	 *
+	 * @param heardWords match keys of the heard words, in order
 	 */
-	public static double bestSimilarity(String expected, String heard) {
-		if (heard.contains(expected)) {
-			return 1.0;
+	public static boolean matches(String expected, List<String> heardWords, double threshold) {
+		if (expected.isEmpty()) {
+			return false;
 		}
 
-		if (heard.length() <= expected.length() + 1) {
-			return similarity(expected, heard);
-		}
+		for (int start = 0; start < heardWords.size(); start++) {
+			StringBuilder run = new StringBuilder();
 
-		double best = 0;
+			for (int end = start; end < heardWords.size() && run.length() <= expected.length() + 2; end++) {
+				run.append(heardWords.get(end));
 
-		for (int length = Math.max(1, expected.length() - 1); length <= expected.length() + 1; length++) {
-			for (int start = 0; start + length <= heard.length(); start++) {
-				best = Math.max(best, similarity(expected, heard.substring(start, start + length)));
+				if (similar(expected, run.toString(), threshold)) {
+					return true;
+				}
 			}
 		}
 
-		return best;
+		return false;
+	}
+
+	private static boolean similar(String expected, String heard, double threshold) {
+		if (heard.isEmpty()) {
+			return false;
+		}
+
+		return expected.length() <= EXACT_UP_TO ? expected.equals(heard) : similarity(expected, heard) >= threshold;
 	}
 
 	static double similarity(String a, String b) {

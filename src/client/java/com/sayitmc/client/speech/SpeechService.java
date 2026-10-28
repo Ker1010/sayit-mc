@@ -100,7 +100,7 @@ public final class SpeechService {
 	 * Opens the microphone and sets up the recognizers off the render thread (both can take a few hundred
 	 * milliseconds, which would freeze the game). Only valid while {@link #canListen()}.
 	 */
-	public synchronized CompletableFuture<ListenSession> listen(List<String> wordList) {
+	public synchronized CompletableFuture<ListenSession> listen(List<String> wordList, double minConfidence) {
 		if (!canListen()) {
 			return CompletableFuture.failedFuture(new IllegalStateException("speech model or microphone is not ready"));
 		}
@@ -108,7 +108,7 @@ public final class SpeechService {
 		Model loaded = model;
 		CompletableFuture<ListenSession> started = CompletableFuture.supplyAsync(() -> {
 			try {
-				return ListenSession.start(loaded, wordList);
+				return ListenSession.start(loaded, wordList, minConfidence);
 			} catch (Exception e) {
 				throw new CompletionException(e);
 			}

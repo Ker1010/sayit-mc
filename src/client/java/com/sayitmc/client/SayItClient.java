@@ -29,6 +29,8 @@ public final class SayItClient implements ClientModInitializer {
 	private static int serverSeconds;
 	/** The server does not let players turn the game off. */
 	private static boolean serverMandatory;
+	private static double matchThreshold = 0.85;
+	private static double minConfidence = 0.8;
 	private static KeyMapping clearKey;
 	private static final KeyMapping[] answerKeys = new KeyMapping[QuizOptions.COUNT];
 
@@ -94,6 +96,8 @@ public final class SayItClient implements ClientModInitializer {
 		serverLanguage = rules.language();
 		serverSeconds = rules.seconds();
 		serverMandatory = rules.mandatory();
+		matchThreshold = rules.matchPercent() / 100.0;
+		minConfidence = rules.confidencePercent() / 100.0;
 		QuizOptions.warmUp(serverLanguage);
 
 		// Start downloading the speech model now, so it is ready by the first new item.
@@ -119,6 +123,15 @@ public final class SayItClient implements ClientModInitializer {
 
 	static int serverSeconds() {
 		return serverSeconds;
+	}
+
+	/** How close a spoken word must be, set by the server. */
+	static double matchThreshold() {
+		return matchThreshold;
+	}
+
+	static double minConfidence() {
+		return minConfidence;
 	}
 
 	static boolean isMandatory() {

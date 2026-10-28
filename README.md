@@ -81,6 +81,8 @@ Server rules — `config/sayitmc-server.json` on the server (or your own game fo
 | --- | --- | --- |
 | `language` | `de_de` | Minecraft language code every player learns |
 | `secondsToAnswer` | `10` | Length of each timer |
+| `matchThreshold` | `0.85` | How close a spoken word must be (0.5–1); words of 3 letters or less must be exact. Also `/sayitadmin strictness <percent>` |
+| `minConfidence` | `0.8` | How sure the recognizer must be when it hears one of the listed words |
 | `clearItemsOnTimeout` | `true` | Take the item when time runs out; `false` for a friendly mode |
 | `includeCreativePlayers` | `false` | Also play in creative mode |
 | `quizItemsAlreadyInInventory` | `false` | Also ask for what players carry when they join |
@@ -96,7 +98,6 @@ Player settings — `config/sayitmc.json` (there is no language setting here on 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `true` | Play the game |
-| `matchThreshold` | `0.75` | How close the spoken word must be (0–1). Lower it if you keep getting rejected |
 | `speechModelUrls` | `{}` | Extra / replacement Vosk models per language |
 
 Speech models are stored in `.minecraft/sayitmc/models/`.

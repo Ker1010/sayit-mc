@@ -42,6 +42,9 @@ final class SayItAdminCommand {
 									return builder.buildFuture();
 								})
 								.executes(ctx -> setLanguage(ctx.getSource(), StringArgumentType.getString(ctx, "code"), game))))
+				.then(LiteralArgumentBuilder.<CommandSourceStack>literal("strictness")
+						.then(RequiredArgumentBuilder.<CommandSourceStack, Integer>argument("percent", IntegerArgumentType.integer(50, 100))
+								.executes(ctx -> setStrictness(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "percent"), game))))
 				.then(LiteralArgumentBuilder.<CommandSourceStack>literal("time")
 						.then(RequiredArgumentBuilder.<CommandSourceStack, Integer>argument("seconds", IntegerArgumentType.integer(3, 120))
 								.executes(ctx -> setTime(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "seconds"), game)))));
@@ -50,7 +53,8 @@ final class SayItAdminCommand {
 	private static int status(CommandSourceStack source, SayItServer game) {
 		ServerConfig config = game.config();
 		reply(source, "Everyone learns " + Languages.displayName(config.language) + " (" + config.language + "), "
-				+ config.secondsToAnswer + "s per word. Change it with /sayitadmin language <code> or /sayitadmin time <seconds>.", false);
+				+ config.secondsToAnswer + "s per word, " + Math.round(config.matchThreshold * 100)
+				+ "% strict. Change with /sayitadmin language <code>, time <seconds> or strictness <percent>.", false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -67,6 +71,15 @@ final class SayItAdminCommand {
 		game.apply(next);
 		game.save();
 		reply(source, "Everyone now learns " + Languages.displayName(language) + " (" + language + ").", false);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	private static int setStrictness(CommandSourceStack source, int percent, SayItServer game) {
+		ServerConfig next = game.config().copy();
+		next.matchThreshold = percent / 100.0;
+		game.apply(next);
+		game.save();
+		reply(source, "Spoken words now have to be " + percent + "% right (3-letter words exactly).", false);
 		return Command.SINGLE_SUCCESS;
 	}
 

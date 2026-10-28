@@ -208,7 +208,8 @@ public final class SayItServer {
 	}
 
 	private void sendRules(ServerPlayer player) {
-		ServerPlayNetworking.send(player, new SayItPayloads.Rules(config.language, config.secondsToAnswer, config.requireMod));
+		ServerPlayNetworking.send(player, new SayItPayloads.Rules(config.language, config.secondsToAnswer, config.requireMod,
+				(int) Math.round(config.matchThreshold * 100), (int) Math.round(config.minConfidence * 100)));
 	}
 
 	private PlayerGame.Actions actions(ServerPlayer player) {

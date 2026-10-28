@@ -21,6 +21,10 @@ public final class ServerConfig {
 	/** Minecraft language code every player learns, e.g. de_de, ja_jp, zh_cn, ko_kr, fr_fr. Players cannot change it. */
 	public String language = DEFAULT_LANGUAGE;
 	public int secondsToAnswer = 10;
+	/** How close the spoken word must be to count, from 0 (anything) to 1 (exact). Answers of 3 letters or less must be exact. */
+	public double matchThreshold = 0.85;
+	/** How sure the speech recognizer must be of each word (0-1) when it hears one of the listed words. */
+	public double minConfidence = 0.8;
 	/** Take the item away when its timer runs out. Turn off for practice without losing items. */
 	public boolean clearItemsOnTimeout = true;
 	public boolean includeCreativePlayers = false;
@@ -82,6 +86,8 @@ public final class ServerConfig {
 		}
 
 		secondsToAnswer = Math.clamp(secondsToAnswer, 3, 120);
+		matchThreshold = Math.clamp(matchThreshold, 0.5, 1.0);
+		minConfidence = Math.clamp(minConfidence, 0.0, 1.0);
 		waitForClientSeconds = Math.clamp(waitForClientSeconds, 5, 600);
 		rememberStashedItemsMinutes = Math.clamp(rememberStashedItemsMinutes, 0, 24 * 60);
 

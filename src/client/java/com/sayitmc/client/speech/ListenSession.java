@@ -34,6 +34,8 @@ public final class ListenSession implements AutoCloseable {
 	private final Recognizer free;
 	/** Null when the word list could not be used with this model. */
 	private final Recognizer limited;
+	/** How sure the limited recognizer must be of every word before its guess counts. */
+	private final double minConfidence;
 	/** Best guess of each finished phrase, for showing what was heard. */
 	private final List<String> finalTexts = new CopyOnWriteArrayList<>();
 	/** Every guess of every finished phrase, from both recognizers, for checking the answer. */
@@ -43,14 +45,15 @@ public final class ListenSession implements AutoCloseable {
 	private volatile boolean clearRequested;
 	private volatile boolean finished;
 
-	private ListenSession(TargetDataLine line, Recognizer free, Recognizer limited) {
+	private ListenSession(TargetDataLine line, Recognizer free, Recognizer limited, double minConfidence) {
 		this.line = line;
 		this.free = free;
 		this.limited = limited;
+		this.minConfidence = minConfidence;
 	}
 
 	/** @param wordList phrases the limited recognizer may hear, e.g. the answer and a few other item names */
-	static ListenSession start(Model model, List<String> wordList) throws LineUnavailableException, IOException {
+	static ListenSession start(Model model, List<String> wordList, double minConfidence) throws LineUnavailableException, IOException {
 		TargetDataLine line = openMicrophone();
 		float rate = line.getFormat().getSampleRate();
 		Recognizer free;
@@ -63,7 +66,7 @@ public final class ListenSession implements AutoCloseable {
 			throw e;
 		}
 
-		ListenSession session = new ListenSession(line, free, limitedRecognizer(model, rate, wordList));
+		ListenSession session = new ListenSession(line, free, limitedRecognizer(model, rate, wordList), minConfidence);
 		Thread thread = new Thread(session::run, "SayIt microphone");
 		thread.setDaemon(true);
 		thread.start();
@@ -88,6 +91,9 @@ public final class ListenSession implements AutoCloseable {
 				return null;
 			}
 
+			// Per-word confidences, so a sound only roughly like a listed word can be rejected.
+			recognizer.setWords(true);
+
 			return recognizer;
 		} catch (RuntimeException e) {
 			SayItMod.LOGGER.warn("Speech model does not support word lists, using free recognition only", e);
@@ -102,17 +108,12 @@ public final class ListenSession implements AutoCloseable {
 		return partial.isEmpty() ? done : (done + " " + partial).trim();
 	}
 
-	/** All guesses so far (both recognizers, top alternatives, the words still being spoken). */
+	/**
+	 * All guesses for finished phrases so far (both recognizers, top alternatives). Words still being spoken
+	 * do not count: the recognizer's guesses jump around until the phrase ends.
+	 */
 	public List<String> candidates() {
-		List<String> all = new ArrayList<>(candidates);
-		String partial = partialText;
-
-		if (!partial.isEmpty()) {
-			all.add(partial);
-		}
-
-		all.add(heard());
-		return all;
+		return List.copyOf(candidates);
 	}
 
 	/** True once the microphone is released and the last words have been flushed into {@link #heard()}. */
@@ -223,12 +224,26 @@ public final class ListenSession implements AutoCloseable {
 		partialText = "";
 	}
 
+	/** Results look like {"result": [{"conf": 0.97, "word": ...}, ...], "text": ...}. */
 	private void addLimitedResult(String json) {
+		JsonObject result = JsonParser.parseString(json).getAsJsonObject();
+		JsonArray words = result.getAsJsonArray("result");
 		String text = field(json, "text").replace("[unk]", "").trim();
 
-		if (!text.isEmpty()) {
-			candidates.add(text);
+		if (text.isEmpty() || words == null || words.isEmpty()) {
+			return;
 		}
+
+		for (JsonElement word : words) {
+			JsonObject entry = word.getAsJsonObject();
+			JsonElement conf = entry.get("conf");
+
+			if (conf == null || conf.getAsDouble() < minConfidence || "[unk]".equals(entry.get("word").getAsString())) {
+				return;
+			}
+		}
+
+		candidates.add(text);
 	}
 
 	private static String field(String json, String name) {

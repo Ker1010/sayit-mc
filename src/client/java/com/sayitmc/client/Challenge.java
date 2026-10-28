@@ -119,7 +119,7 @@ public final class Challenge {
 						startListening(now);
 					}
 				} else if (speech.canListen()) {
-					opening = speech.listen(wordList());
+					opening = speech.listen(wordList(), SayItClient.minConfidence());
 				} else if (speech.state() == SpeechService.State.UNAVAILABLE) {
 					startQuiz(speech.problem(), now);
 				}
@@ -288,7 +288,7 @@ public final class Challenge {
 	private List<String> wordList() {
 		List<String> words = new ArrayList<>(Romanizer.speechPhrases(word, languageCode));
 
-		for (String decoy : QuizOptions.decoys(word, languageCode, 4, new Random())) {
+		for (String decoy : QuizOptions.decoys(word, languageCode, 10, new Random())) {
 			words.addAll(Romanizer.speechPhrases(decoy, languageCode));
 		}
 
@@ -305,8 +305,15 @@ public final class Challenge {
 
 		heard = latest;
 		checkedGuesses = guesses.size();
-		boolean matched = guesses.stream().anyMatch(guess ->
-				AnswerMatcher.matches(expectedKey, Romanizer.matchKey(guess, languageCode), config.matchThreshold));
+		boolean matched = guesses.stream().anyMatch(guess -> {
+			List<String> words = new ArrayList<>();
+
+			for (String heardWord : guess.split("\\s+")) {
+				words.add(Romanizer.matchKey(heardWord, languageCode));
+			}
+
+			return AnswerMatcher.matches(expectedKey, words, SayItClient.matchThreshold());
+		});
 
 		if (matched) {
 			session.close();

@@ -22,10 +22,8 @@ public final class ClientConfig {
 	private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("sayitmc.json");
 	private static ClientConfig instance = new ClientConfig();
 
-	// The language and the time per word are chosen by the server, not here.
+	// The language, the time per word and how strict the speech check is are chosen by the server, not here.
 	public boolean enabled = true;
-	/** How close the spoken word must be to count, from 0 (anything) to 1 (exact). */
-	public double matchThreshold = 0.75;
 	/** Optional Vosk model download URLs by language ("ja" or "ja_jp"), for languages without a built-in one. */
 	public Map<String, String> speechModelUrls = new LinkedHashMap<>();
 
@@ -66,7 +64,5 @@ public final class ClientConfig {
 		if (speechModelUrls == null) {
 			speechModelUrls = new LinkedHashMap<>();
 		}
-
-		matchThreshold = Math.clamp(matchThreshold, 0.0, 1.0);
 	}
 }
