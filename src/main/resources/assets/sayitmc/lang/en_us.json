@@ -1,6 +1,6 @@
 {
 	"sayitmc.hud.header": "SAY IT IN %s",
-	"sayitmc.hud.listening": "listening...",
+	"sayitmc.hud.listening": "listening... (%s clears)",
 	"sayitmc.hud.heard": "heard: %s",
 	"sayitmc.hud.correct": "✔ Correct!",
 	"sayitmc.hud.timeout": "✘ Time's up!",
@@ -8,5 +8,7 @@
 	"sayitmc.hud.loading": "loading speech model...",
 	"sayitmc.hud.flashcard": "no speech check: %s",
 	"sayitmc.hud.cleared": "✘ Time's up! Item cleared",
-	"sayitmc.hud.dropped": "dropped - timer reset"
+	"sayitmc.hud.dropped": "dropped - timer reset",
+	"key.category.sayitmc.main": "Say It!",
+	"key.sayitmc.clear_heard": "Clear misheard words"
 }

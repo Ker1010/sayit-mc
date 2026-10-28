@@ -27,6 +27,7 @@ public final class ListenSession implements AutoCloseable {
 	private final List<String> finalTexts = new CopyOnWriteArrayList<>();
 	private volatile String partialText = "";
 	private volatile boolean running = true;
+	private volatile boolean clearRequested;
 	private volatile boolean finished;
 
 	private ListenSession(TargetDataLine line, Recognizer recognizer) {
@@ -64,6 +65,13 @@ public final class ListenSession implements AutoCloseable {
 		return finished;
 	}
 
+	/** Forgets everything heard so far, e.g. a misheard word, so the player can say it again cleanly. */
+	public void clearHeard() {
+		finalTexts.clear();
+		partialText = "";
+		clearRequested = true;
+	}
+
 	@Override
 	public void close() {
 		running = false;
@@ -78,6 +86,14 @@ public final class ListenSession implements AutoCloseable {
 
 			while (running) {
 				int read = line.read(buffer, 0, buffer.length);
+
+				if (clearRequested) {
+					clearRequested = false;
+					recognizer.reset();
+					finalTexts.clear();
+					partialText = "";
+					continue;
+				}
 
 				if (read <= 0) {
 					continue;

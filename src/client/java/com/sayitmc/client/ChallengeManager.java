@@ -100,6 +100,12 @@ public final class ChallengeManager {
 		}
 	}
 
+	public void clearHeard() {
+		if (current != null) {
+			current.clearHeard();
+		}
+	}
+
 	public Challenge current() {
 		return current;
 	}

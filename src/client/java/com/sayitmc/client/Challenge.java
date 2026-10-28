@@ -171,6 +171,17 @@ public final class Challenge {
 		};
 	}
 
+	/** Throws away the words heard so far (the "clear" key). */
+	boolean clearHeard() {
+		if (phase != Phase.LISTENING || session == null) {
+			return false;
+		}
+
+		session.clearHeard();
+		heard = "";
+		return true;
+	}
+
 	void cancel() {
 		closeSession();
 		over = true;

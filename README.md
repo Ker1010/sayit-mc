@@ -53,6 +53,12 @@ Server operators (permission level 2+):
 | `/sayitadmin language <code>` | Language everyone learns, e.g. `ja_jp`, `zh_cn`, `ko_kr`, `de_de`, `fr_fr`, `es_es` (tab-completes). Everyone's current word is cancelled; progress is kept per language |
 | `/sayitadmin time <seconds>` | Time per word (3–120) |
 
+Key binds (Options → Controls → Key Binds → *Say It!*):
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| Clear misheard words | Backspace | Throws away what the recognizer heard so far, so you can say the word again cleanly |
+
 Players:
 
 | Command | What it does |

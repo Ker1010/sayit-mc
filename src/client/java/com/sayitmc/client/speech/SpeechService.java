@@ -24,6 +24,9 @@ public final class SpeechService {
 		UNAVAILABLE
 	}
 
+	/** A failed download (e.g. no internet) is tried again after this long. */
+	private static final long RETRY_MILLIS = 60_000;
+
 	private final Path modelsDir;
 	private final ExecutorService worker = Executors.newSingleThreadExecutor(runnable -> {
 		Thread thread = new Thread(runnable, "SayIt speech model loader");
@@ -34,6 +37,7 @@ public final class SpeechService {
 	private volatile State state = State.IDLE;
 	private volatile double downloadProgress;
 	private volatile String problem = "";
+	private volatile long failedAt;
 	private String languageCode;
 	private Model model;
 	private Future<?> pending;
@@ -58,7 +62,10 @@ public final class SpeechService {
 
 	/** Starts getting the model for this language ready; cheap to call repeatedly. */
 	public synchronized void prepare(String code) {
-		if (code.equals(languageCode) && state != State.IDLE) {
+		boolean retry = state == State.UNAVAILABLE && System.currentTimeMillis() - failedAt > RETRY_MILLIS
+				&& SpeechModels.urlFor(code).isPresent();
+
+		if (code.equals(languageCode) && state != State.IDLE && !retry) {
 			return;
 		}
 
@@ -151,6 +158,7 @@ public final class SpeechService {
 	private synchronized void fail(String code, String reason) {
 		if (isCurrent(code)) {
 			problem = reason;
+			failedAt = System.currentTimeMillis();
 			state = State.UNAVAILABLE;
 		}
 	}

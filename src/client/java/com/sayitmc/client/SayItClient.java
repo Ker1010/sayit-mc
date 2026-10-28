@@ -1,10 +1,14 @@
 package com.sayitmc.client;
 
+import org.lwjgl.sdl.SDLScancode;
+
+import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -25,6 +29,7 @@ public final class SayItClient implements ClientModInitializer {
 	private static int serverSeconds;
 	/** The server does not let players turn the game off. */
 	private static boolean serverMandatory;
+	private static KeyMapping clearKey;
 
 	@Override
 	public void onInitializeClient() {
@@ -49,7 +54,18 @@ public final class SayItClient implements ClientModInitializer {
 			serverMandatory = false;
 			challenges.clear();
 		});
-		ClientTickEvents.END_CLIENT_TICK.register(client -> challenges.tick(client.player));
+		// Changeable in Options -> Controls -> Key Binds.
+		KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(SayItMod.MOD_ID, "main"));
+		clearKey = KeyMappingHelper.registerKeyMapping(
+				new KeyMapping("key.sayitmc.clear_heard", SDLScancode.SDL_SCANCODE_BACKSPACE, category));
+
+		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			while (clearKey.consumeClick()) {
+				challenges.clearHeard();
+			}
+
+			challenges.tick(client.player);
+		});
 
 		HudElementRegistry.addLast(Identifier.fromNamespaceAndPath(SayItMod.MOD_ID, "challenge"), ChallengeHud::extract);
 		ClientCommandRegistrationCallback.EVENT.register(SayItCommands::register);
@@ -93,6 +109,11 @@ public final class SayItClient implements ClientModInitializer {
 
 	static boolean isMandatory() {
 		return serverGame && serverMandatory;
+	}
+
+	/** The key currently bound to "clear misheard words", as shown in the controls menu. */
+	static String clearKeyName() {
+		return clearKey.getTranslatedKeyMessage().getString();
 	}
 
 	public static SpeechService speech() {

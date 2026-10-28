@@ -67,7 +67,9 @@ public final class ChallengeHud {
 		}
 
 		textWidth = Math.min(textWidth, maxTextWidth);
-		String status = fit(font, statusLine(challenge), textWidth);
+		String status = phase == Challenge.Phase.LISTENING || phase == Challenge.Phase.CHECKING
+				? fitEnd(font, statusLine(challenge), textWidth)
+				: fit(font, statusLine(challenge), textWidth);
 		subtitle = subtitle == null ? null : fit(font, subtitle, textWidth);
 
 		int width = TEXT_LEFT + textWidth + PADDING_RIGHT;
@@ -122,7 +124,7 @@ public final class ChallengeHud {
 					? I18n.get("sayitmc.hud.downloading", Math.round(speech.downloadProgress() * 100))
 					: I18n.get("sayitmc.hud.loading");
 			case LISTENING, CHECKING -> challenge.heard().isEmpty()
-					? I18n.get("sayitmc.hud.listening")
+					? I18n.get("sayitmc.hud.listening", SayItClient.clearKeyName())
 					: I18n.get("sayitmc.hud.heard", challenge.heard());
 			case CORRECT -> I18n.get("sayitmc.hud.correct");
 			case TIMED_OUT -> I18n.get("sayitmc.hud.timeout");
@@ -166,6 +168,22 @@ public final class ChallengeHud {
 
 	private static int width(Font font, String text) {
 		return font.width(Component.literal(text));
+	}
+
+	/** Like {@link #fit} but keeps the end, so the newest recognized words stay visible. */
+	private static String fitEnd(Font font, String text, int maxWidth) {
+		if (width(font, text) <= maxWidth) {
+			return text;
+		}
+
+		int ellipsis = width(font, "...");
+		int start = 0;
+
+		while (start < text.length() && width(font, text.substring(start)) + ellipsis > maxWidth) {
+			start++;
+		}
+
+		return "..." + text.substring(start);
 	}
 
 	/** Cuts {@code text} with an ellipsis so it is at most {@code maxWidth} pixels wide. */
