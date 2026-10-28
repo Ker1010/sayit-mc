@@ -5,8 +5,13 @@
 	"name": "Say It!",
 	"description": "Learn a language while you play: every new item you get has to be said out loud in the language you are learning before its timer runs out, or it is cleared. Each player speaks into their own microphone. Non-Latin words get an English-style pronunciation subtitle.",
 	"authors": [
-		"kermenglee"
+		"Ker1010"
 	],
+	"contact": {
+		"homepage": "https://github.com/Ker1010/sayit-mc",
+		"sources": "https://github.com/Ker1010/sayit-mc",
+		"issues": "https://github.com/Ker1010/sayit-mc/issues"
+	},
 	"license": "MIT",
 	"icon": "assets/sayitmc/icon.png",
 	"environment": "*",
