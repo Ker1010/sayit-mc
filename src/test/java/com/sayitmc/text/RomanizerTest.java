@@ -42,4 +42,12 @@ class RomanizerTest {
 		assertEquals("Sitári", Romanizer.subtitle("Σιτάρι", "el_gr"));
 		assertEquals("khaw sali", Romanizer.subtitle("ข้าวสาลี", "th_th"));
 	}
+
+	@Test
+	void speechPhrasesMatchHowSpeechModelsSpellWords() {
+		assertEquals(java.util.List.of("ダイヤモンド の 剣", "ダイヤモンドの剣"), Romanizer.speechPhrases("ダイヤモンドの剣", "ja_jp"));
+		assertEquals(java.util.List.of("小 麦", "小麦"), Romanizer.speechPhrases("小麦", "zh_cn"));
+		assertEquals(java.util.List.of("épée en diamant"), Romanizer.speechPhrases("Épée en diamant", "fr_fr"));
+		assertEquals(java.util.List.of("jack o lantern"), Romanizer.speechPhrases("Jack o'Lantern", "en_us"));
+	}
 }

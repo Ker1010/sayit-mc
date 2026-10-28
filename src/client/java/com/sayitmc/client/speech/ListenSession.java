@@ -1,6 +1,7 @@
 package com.sayitmc.client.speech;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -10,47 +11,88 @@ import javax.sound.sampled.DataLine;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.TargetDataLine;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.vosk.Model;
 import org.vosk.Recognizer;
 
 import com.sayitmc.SayItMod;
 
-/** Streams the microphone into a Vosk recognizer on its own thread until {@link #close()} is called. */
+/**
+ * Streams the microphone into two Vosk recognizers on its own thread until {@link #close()} is called:
+ * a free one that reports its top guesses, and one limited to a word list (the answer plus decoys), which
+ * hears short words much more reliably.
+ */
 public final class ListenSession implements AutoCloseable {
 	/** Vosk models are trained on 16 kHz, but it resamples, so fall back to what the microphone supports. */
 	private static final float[] SAMPLE_RATES = {16000f, 48000f, 44100f};
+	private static final int ALTERNATIVES = 3;
 
 	private final TargetDataLine line;
-	private final Recognizer recognizer;
+	private final Recognizer free;
+	/** Null when the word list could not be used with this model. */
+	private final Recognizer limited;
+	/** Best guess of each finished phrase, for showing what was heard. */
 	private final List<String> finalTexts = new CopyOnWriteArrayList<>();
+	/** Every guess of every finished phrase, from both recognizers, for checking the answer. */
+	private final List<String> candidates = new CopyOnWriteArrayList<>();
 	private volatile String partialText = "";
 	private volatile boolean running = true;
 	private volatile boolean clearRequested;
 	private volatile boolean finished;
 
-	private ListenSession(TargetDataLine line, Recognizer recognizer) {
+	private ListenSession(TargetDataLine line, Recognizer free, Recognizer limited) {
 		this.line = line;
-		this.recognizer = recognizer;
+		this.free = free;
+		this.limited = limited;
 	}
 
-	static ListenSession start(Model model) throws LineUnavailableException, IOException {
+	/** @param wordList phrases the limited recognizer may hear, e.g. the answer and a few other item names */
+	static ListenSession start(Model model, List<String> wordList) throws LineUnavailableException, IOException {
 		TargetDataLine line = openMicrophone();
-		Recognizer recognizer;
+		float rate = line.getFormat().getSampleRate();
+		Recognizer free;
 
 		try {
-			recognizer = new Recognizer(model, line.getFormat().getSampleRate());
+			free = new Recognizer(model, rate);
+			free.setMaxAlternatives(ALTERNATIVES);
 		} catch (IOException | RuntimeException e) {
 			line.close();
 			throw e;
 		}
 
-		ListenSession session = new ListenSession(line, recognizer);
+		ListenSession session = new ListenSession(line, free, limitedRecognizer(model, rate, wordList));
 		Thread thread = new Thread(session::run, "SayIt microphone");
 		thread.setDaemon(true);
 		thread.start();
 		return session;
+	}
+
+	private static Recognizer limitedRecognizer(Model model, float rate, List<String> wordList) {
+		if (wordList.isEmpty()) {
+			return null;
+		}
+
+		JsonArray grammar = new JsonArray();
+		wordList.forEach(grammar::add);
+		// Lets noise and other words come out as "unknown" instead of being forced onto a listed word.
+		grammar.add("[unk]");
+
+		try {
+			Recognizer recognizer = new Recognizer(model, rate, grammar.toString());
+
+			if (recognizer.getPointer() == null) {
+				SayItMod.LOGGER.warn("Speech model refused the word list, using free recognition only");
+				return null;
+			}
+
+			return recognizer;
+		} catch (RuntimeException e) {
+			SayItMod.LOGGER.warn("Speech model does not support word lists, using free recognition only", e);
+			return null;
+		}
 	}
 
 	/** Everything recognized so far, including the words still being spoken. */
@@ -58,6 +100,19 @@ public final class ListenSession implements AutoCloseable {
 		String done = String.join(" ", finalTexts);
 		String partial = partialText;
 		return partial.isEmpty() ? done : (done + " " + partial).trim();
+	}
+
+	/** All guesses so far (both recognizers, top alternatives, the words still being spoken). */
+	public List<String> candidates() {
+		List<String> all = new ArrayList<>(candidates);
+		String partial = partialText;
+
+		if (!partial.isEmpty()) {
+			all.add(partial);
+		}
+
+		all.add(heard());
+		return all;
 	}
 
 	/** True once the microphone is released and the last words have been flushed into {@link #heard()}. */
@@ -68,6 +123,7 @@ public final class ListenSession implements AutoCloseable {
 	/** Forgets everything heard so far, e.g. a misheard word, so the player can say it again cleanly. */
 	public void clearHeard() {
 		finalTexts.clear();
+		candidates.clear();
 		partialText = "";
 		clearRequested = true;
 	}
@@ -89,8 +145,14 @@ public final class ListenSession implements AutoCloseable {
 
 				if (clearRequested) {
 					clearRequested = false;
-					recognizer.reset();
+					free.reset();
+
+					if (limited != null) {
+						limited.reset();
+					}
+
 					finalTexts.clear();
+					candidates.clear();
 					partialText = "";
 					continue;
 				}
@@ -99,32 +161,74 @@ public final class ListenSession implements AutoCloseable {
 					continue;
 				}
 
-				if (recognizer.acceptWaveForm(buffer, read)) {
-					addFinal(recognizer.getResult());
+				if (free.acceptWaveForm(buffer, read)) {
+					addFreeResult(free.getResult());
 				} else {
-					partialText = field(recognizer.getPartialResult(), "partial");
+					partialText = field(free.getPartialResult(), "partial");
+				}
+
+				// Only finished phrases count from the word list; its partial guesses jump around too much.
+				if (limited != null && limited.acceptWaveForm(buffer, read)) {
+					addLimitedResult(limited.getResult());
 				}
 			}
 
-			addFinal(recognizer.getFinalResult());
+			addFreeResult(free.getFinalResult());
+
+			if (limited != null) {
+				addLimitedResult(limited.getFinalResult());
+			}
 		} catch (Throwable t) {
 			SayItMod.LOGGER.warn("Speech recognition stopped", t);
 		} finally {
 			line.stop();
 			line.close();
-			recognizer.close();
+			free.close();
+
+			if (limited != null) {
+				limited.close();
+			}
+
 			finished = true;
 		}
 	}
 
-	private void addFinal(String json) {
-		String text = field(json, "text");
+	/** With alternatives on, results look like {"alternatives": [{"text": ...}, ...]}. */
+	private void addFreeResult(String json) {
+		JsonObject result = JsonParser.parseString(json).getAsJsonObject();
+		JsonArray alternatives = result.getAsJsonArray("alternatives");
+		List<String> texts = new ArrayList<>();
 
-		if (!text.isEmpty()) {
-			finalTexts.add(text);
+		if (alternatives != null) {
+			for (JsonElement alternative : alternatives) {
+				JsonElement text = alternative.getAsJsonObject().get("text");
+
+				if (text != null && !text.getAsString().isBlank()) {
+					texts.add(text.getAsString().trim());
+				}
+			}
+		} else {
+			String text = field(json, "text");
+
+			if (!text.isEmpty()) {
+				texts.add(text);
+			}
+		}
+
+		if (!texts.isEmpty()) {
+			finalTexts.add(texts.getFirst());
+			candidates.addAll(texts);
 		}
 
 		partialText = "";
+	}
+
+	private void addLimitedResult(String json) {
+		String text = field(json, "text").replace("[unk]", "").trim();
+
+		if (!text.isEmpty()) {
+			candidates.add(text);
+		}
 	}
 
 	private static String field(String json, String name) {

@@ -75,6 +75,7 @@ public final class Challenge {
 	private boolean over;
 	private ListenSession session;
 	private String heard = "";
+	private int checkedGuesses;
 	private String note = "";
 	private List<String> options = List.of();
 	private List<String> optionSubtitles = List.of();
@@ -215,6 +216,7 @@ public final class Challenge {
 
 		session.clearHeard();
 		heard = "";
+		checkedGuesses = 0;
 		return true;
 	}
 
@@ -257,7 +259,7 @@ public final class Challenge {
 
 	private void startListening(SpeechService speech, long now) {
 		try {
-			session = speech.listen();
+			session = speech.listen(wordList());
 			enter(Phase.LISTENING, now);
 
 			if (isServerGame()) {
@@ -269,16 +271,34 @@ public final class Challenge {
 		}
 	}
 
+	/**
+	 * The answer and a few other item names, spelled the way the speech model may know them. The decoys keep
+	 * the word-list recognizer from forcing any sound onto the answer.
+	 */
+	private List<String> wordList() {
+		List<String> words = new ArrayList<>(Romanizer.speechPhrases(word, languageCode));
+
+		for (String decoy : QuizOptions.decoys(word, languageCode, 4, new Random())) {
+			words.addAll(Romanizer.speechPhrases(decoy, languageCode));
+		}
+
+		return words;
+	}
+
 	private void checkAnswer(ClientConfig config, long now) {
 		String latest = session.heard();
+		List<String> guesses = session.candidates();
 
-		if (latest.equals(heard)) {
+		if (latest.equals(heard) && guesses.size() == checkedGuesses) {
 			return;
 		}
 
 		heard = latest;
+		checkedGuesses = guesses.size();
+		boolean matched = guesses.stream().anyMatch(guess ->
+				AnswerMatcher.matches(expectedKey, Romanizer.matchKey(guess, languageCode), config.matchThreshold));
 
-		if (AnswerMatcher.matches(expectedKey, Romanizer.matchKey(latest, languageCode), config.matchThreshold)) {
+		if (matched) {
 			session.close();
 			enter(Phase.CORRECT, now);
 			playSound("entity.player.levelup", 1.4f);

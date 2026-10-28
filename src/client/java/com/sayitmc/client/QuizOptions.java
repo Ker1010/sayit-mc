@@ -39,6 +39,22 @@ final class QuizOptions {
 		return options;
 	}
 
+	/** Up to {@code count} other item names, never {@code word}. */
+	static List<String> decoys(String word, String language, int count, Random random) {
+		List<String> names = names(language);
+		Set<String> picked = new LinkedHashSet<>();
+
+		for (int attempt = 0; attempt < 100 && picked.size() < count && !names.isEmpty(); attempt++) {
+			String name = names.get(random.nextInt(names.size()));
+
+			if (!name.equals(word)) {
+				picked.add(name);
+			}
+		}
+
+		return List.copyOf(picked);
+	}
+
 	private static List<String> names(String language) {
 		if (!language.equals(cachedLanguage)) {
 			Set<String> unique = new LinkedHashSet<>();

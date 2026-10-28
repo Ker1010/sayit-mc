@@ -1,5 +1,7 @@
 package com.sayitmc.text;
 
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -84,6 +86,34 @@ public final class Romanizer {
 
 		// Kana spellings write long vowels out (さぎょう = sagyou) where readings mark them (sagyō -> sagyo).
 		return lang.equals("ja") ? JAPANESE_LONG_VOWELS.matcher(key).replaceAll("$1") : key.toString();
+	}
+
+	/**
+	 * The ways a speech model's vocabulary may spell this phrase, for limiting recognition to a word list:
+	 * words separated by spaces (Japanese split into words, Chinese also per character), lowercase, no punctuation.
+	 */
+	public static List<String> speechPhrases(String text, String languageCode) {
+		String lang = languagePrefix(languageCode);
+		String plain = text.toLowerCase(Locale.ROOT).replaceAll("[\\p{Punct}・、。「」（）()]+", " ").replaceAll("\\s+", " ").trim();
+		Set<String> phrases = new LinkedHashSet<>();
+
+		if (lang.equals("ja")) {
+			StringBuilder words = new StringBuilder();
+
+			for (Token token : japaneseTokenizer().tokenize(plain)) {
+				if (!token.getSurface().isBlank()) {
+					words.append(words.isEmpty() ? "" : " ").append(token.getSurface().trim());
+				}
+			}
+
+			phrases.add(words.toString());
+		} else if (lang.equals("zh")) {
+			phrases.add(String.join(" ", plain.replace(" ", "").split("")));
+		}
+
+		phrases.add(plain);
+		phrases.removeIf(String::isBlank);
+		return List.copyOf(phrases);
 	}
 
 	/** {@code ja_jp -> ja}, {@code zh_tw -> zh}. */

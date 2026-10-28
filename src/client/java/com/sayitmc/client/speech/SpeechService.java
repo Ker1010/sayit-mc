@@ -1,6 +1,7 @@
 package com.sayitmc.client.speech;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -93,12 +94,12 @@ public final class SpeechService {
 	}
 
 	/** Opens the microphone. Only valid while {@link #canListen()}. */
-	public synchronized ListenSession listen() throws Exception {
+	public synchronized ListenSession listen(List<String> wordList) throws Exception {
 		if (!canListen()) {
 			throw new IllegalStateException("speech model or microphone is not ready");
 		}
 
-		active = ListenSession.start(model);
+		active = ListenSession.start(model, wordList);
 		return active;
 	}
 
