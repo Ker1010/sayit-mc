@@ -30,6 +30,7 @@ public final class SayItClient implements ClientModInitializer {
 	/** The server does not let players turn the game off. */
 	private static boolean serverMandatory;
 	private static KeyMapping clearKey;
+	private static final KeyMapping[] answerKeys = new KeyMapping[QuizOptions.COUNT];
 
 	@Override
 	public void onInitializeClient() {
@@ -58,10 +59,22 @@ public final class SayItClient implements ClientModInitializer {
 		KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(SayItMod.MOD_ID, "main"));
 		clearKey = KeyMappingHelper.registerKeyMapping(
 				new KeyMapping("key.sayitmc.clear_heard", SDLScancode.SDL_SCANCODE_BACKSPACE, category));
+		// Not 1-3, which already switch hotbar slots.
+		int[] answerDefaults = {SDLScancode.SDL_SCANCODE_Z, SDLScancode.SDL_SCANCODE_X, SDLScancode.SDL_SCANCODE_C};
+
+		for (int i = 0; i < answerKeys.length; i++) {
+			answerKeys[i] = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.sayitmc.answer_" + (i + 1), answerDefaults[i], category));
+		}
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (clearKey.consumeClick()) {
 				challenges.clearHeard();
+			}
+
+			for (int i = 0; i < answerKeys.length; i++) {
+				while (answerKeys[i].consumeClick()) {
+					challenges.choose(i);
+				}
 			}
 
 			challenges.tick(client.player);
@@ -114,6 +127,11 @@ public final class SayItClient implements ClientModInitializer {
 	/** The key currently bound to "clear misheard words", as shown in the controls menu. */
 	static String clearKeyName() {
 		return clearKey.getTranslatedKeyMessage().getString();
+	}
+
+	/** The key currently bound to quiz answer {@code index}. */
+	static String answerKeyName(int index) {
+		return answerKeys[index].getTranslatedKeyMessage().getString();
 	}
 
 	public static SpeechService speech() {

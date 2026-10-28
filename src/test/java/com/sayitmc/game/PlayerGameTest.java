@@ -93,7 +93,7 @@ class PlayerGameTest {
 	void correctAnswerIsLearnedAndNeverAskedAgain() {
 		tick("minecraft:wheat");
 		game.listening(1, now);
-		game.answer(1, true, learned::add, actions);
+		game.answer(1, Verdict.CORRECT, true, learned::add, now, config, actions);
 		assertEquals(List.of("start 1 minecraft:wheat 10", "end 1 CORRECT"), log);
 		assertTrue(learned.contains("minecraft:wheat"));
 
@@ -129,9 +129,18 @@ class PlayerGameTest {
 	}
 
 	@Test
+	void wrongQuizAnswerClearsRightAway() {
+		tick("minecraft:wheat");
+		game.listening(1, now);
+		game.answer(1, Verdict.WRONG, true, learned::add, now, config, actions);
+		assertEquals(List.of("start 1 minecraft:wheat 10", "clear minecraft:wheat", "end 1 CLEARED"), log);
+		assertTrue(learned.isEmpty());
+	}
+
+	@Test
 	void clientThatCannotJudgeCancelsWithoutClearing() {
 		tick("minecraft:wheat");
-		game.answer(1, false, learned::add, actions);
+		game.answer(1, Verdict.UNJUDGEABLE, true, learned::add, now, config, actions);
 		advance(TIMEOUT_TICKS * 2, "minecraft:wheat");
 		assertEquals(List.of("start 1 minecraft:wheat 10", "end 1 CANCELLED"), log);
 	}
@@ -143,7 +152,7 @@ class PlayerGameTest {
 		String first = log.getFirst().split(" ")[2];
 		String second = first.equals("minecraft:wheat") ? "minecraft:bread" : "minecraft:wheat";
 
-		game.answer(1, true, learned::add, actions);
+		game.answer(1, Verdict.CORRECT, true, learned::add, now, config, actions);
 		tick("minecraft:wheat", "minecraft:bread");
 		assertEquals("start 2 " + second + " 10", log.get(2));
 	}

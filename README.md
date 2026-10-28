@@ -60,6 +60,7 @@ Key binds (Options → Controls → Key Binds → *Say It!*):
 | Key | Default | What it does |
 | --- | --- | --- |
 | Clear misheard words | Backspace | Throws away what the recognizer heard so far, so you can say the word again cleanly |
+| Quiz answer 1 / 2 / 3 | Z / X / C | Picks an answer in the no-microphone quiz |
 
 Players:
 
@@ -117,7 +118,8 @@ and their items are never cleared. Players can add any [Vosk model](https://alph
 
 ## Notes
 
-- If a player has no microphone or speech model, their cards become flashcards and their items are not cleared.
+- **No microphone** (or no speech model for the language): the card turns into a quiz with three words in the server's
+  language. Pick the right one with Z / X / C before the timer runs out; a wrong pick clears the item like a timeout.
 - **macOS:** the app that launches Minecraft needs microphone permission (System Settings → Privacy & Security →
   Microphone). The official launcher may not ask for it; launchers like Prism Launcher do.
 - Speech recognition natives are included for Windows x64, macOS and Linux x64.

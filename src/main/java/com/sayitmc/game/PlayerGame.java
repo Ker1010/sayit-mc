@@ -62,6 +62,11 @@ public final class PlayerGame {
 		this.enabled = enabled;
 	}
 
+	/** The item of the running challenge, or null. */
+	public String runningItem() {
+		return running == null ? null : running.itemId;
+	}
+
 	public boolean isPlaying() {
 		return enabled;
 	}
@@ -122,17 +127,7 @@ public final class PlayerGame {
 			if (!running.counting && now - running.since > config.waitForClientSeconds * 20L) {
 				finish(Outcome.CANCELLED, actions);
 			} else if (running.counting && now - running.since > config.secondsToAnswer * 20L + GRACE_TICKS) {
-				if (!config.clearItemsOnTimeout) {
-					finish(Outcome.TIMED_OUT, actions);
-				} else {
-					if (away) {
-						stash(running.itemId, now, config);
-					} else {
-						actions.clearItem(running.itemId);
-					}
-
-					finish(Outcome.CLEARED, actions);
-				}
+				timeUp(!away, now, config, actions);
 			}
 		}
 
@@ -155,19 +150,25 @@ public final class PlayerGame {
 	}
 
 	/**
-	 * The client's verdict: {@code correct}, or that it cannot judge (no microphone, no speech model,
-	 * no translation), which ends the challenge without clearing anything.
+	 * The client's verdict. A wrong quiz answer counts like running out of time; an unjudgeable one
+	 * (e.g. no translation) ends the challenge without touching the item.
+	 *
+	 * @param itemHeld whether the item is in the player's inventory right now
 	 */
-	public void answer(int id, boolean correct, Consumer<String> markLearned, Actions actions) {
+	public void answer(int id, Verdict verdict, boolean itemHeld, Consumer<String> markLearned, long now,
+			ServerConfig config, Actions actions) {
 		if (running == null || running.id != id) {
 			return;
 		}
 
-		if (correct) {
-			markLearned.accept(running.itemId);
+		switch (verdict) {
+			case CORRECT -> {
+				markLearned.accept(running.itemId);
+				finish(Outcome.CORRECT, actions);
+			}
+			case WRONG -> timeUp(itemHeld, now, config, actions);
+			case UNJUDGEABLE -> finish(Outcome.CANCELLED, actions);
 		}
-
-		finish(correct ? Outcome.CORRECT : Outcome.CANCELLED, actions);
 	}
 
 	/** Drops the running challenge and the queue; the current inventory becomes the new baseline. */
@@ -179,6 +180,22 @@ public final class PlayerGame {
 		queue.clear();
 		stashedOverdue.clear();
 		previous = null;
+	}
+
+	/** Time ran out (or the quiz answer was wrong): the item is cleared, now or when it comes back. */
+	private void timeUp(boolean itemHeld, long now, ServerConfig config, Actions actions) {
+		if (!config.clearItemsOnTimeout) {
+			finish(Outcome.TIMED_OUT, actions);
+			return;
+		}
+
+		if (itemHeld) {
+			actions.clearItem(running.itemId);
+		} else {
+			stash(running.itemId, now, config);
+		}
+
+		finish(Outcome.CLEARED, actions);
 	}
 
 	/** Remembers an item that left without being dropped, so it is cleared when it comes back. */

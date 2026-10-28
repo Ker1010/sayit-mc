@@ -12,6 +12,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import com.sayitmc.SayItMod;
 import com.sayitmc.client.speech.SpeechService;
 import com.sayitmc.game.Outcome;
+import com.sayitmc.game.Verdict;
 import com.sayitmc.network.SayItPayloads;
 
 /**
@@ -96,7 +97,13 @@ public final class ChallengeManager {
 
 	private static void answerUnjudgeable(int serverId) {
 		if (serverId != Challenge.PRACTICE) {
-			ClientPlayNetworking.send(new SayItPayloads.Answer(serverId, false));
+			ClientPlayNetworking.send(new SayItPayloads.Answer(serverId, Verdict.UNJUDGEABLE.ordinal()));
+		}
+	}
+
+	public void choose(int index) {
+		if (current != null) {
+			current.choose(index);
 		}
 	}
 

@@ -1,5 +1,9 @@
 package com.sayitmc.client;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -15,6 +19,7 @@ import com.sayitmc.SayItMod;
 import com.sayitmc.client.speech.ListenSession;
 import com.sayitmc.client.speech.SpeechService;
 import com.sayitmc.game.Outcome;
+import com.sayitmc.game.Verdict;
 import com.sayitmc.network.SayItPayloads;
 import com.sayitmc.text.AnswerMatcher;
 import com.sayitmc.text.Romanizer;
@@ -29,9 +34,13 @@ public final class Challenge {
 		/** Speech model still downloading or loading; the clock has not started. */
 		PREPARING,
 		LISTENING,
+		/** No speech: pick the right word out of three with the answer keys. */
+		QUIZ,
 		/** Time is up, waiting for the last words (and, in the server game, the server's verdict). */
 		CHECKING,
 		CORRECT,
+		/** Picked a wrong quiz answer. */
+		WRONG,
 		/** Time ran out on a practice card, or on a server that keeps items. */
 		TIMED_OUT,
 		/** Server game: time ran out and the item was taken away. */
@@ -67,6 +76,8 @@ public final class Challenge {
 	private ListenSession session;
 	private String heard = "";
 	private String note = "";
+	private List<String> options = List.of();
+	private List<String> optionSubtitles = List.of();
 
 	private Challenge(int serverId, ItemStack stack, String itemId, String languageCode, String word, long answerMillis) {
 		this.serverId = serverId;
@@ -98,11 +109,11 @@ public final class Challenge {
 		switch (phase) {
 			case PREPARING -> {
 				if (expectedKey.isEmpty()) {
-					showFlashcard("nothing to compare", now);
+					startQuiz("nothing to compare", now);
 				} else if (speech.canListen()) {
 					startListening(speech, now);
 				} else if (speech.state() == SpeechService.State.UNAVAILABLE) {
-					showFlashcard(speech.problem(), now);
+					startQuiz(speech.problem(), now);
 				}
 			}
 			case LISTENING -> {
@@ -113,13 +124,20 @@ public final class Challenge {
 					enter(Phase.CHECKING, now);
 				}
 			}
+			case QUIZ -> {
+				if (now - phaseStart >= answerMillis) {
+					enter(Phase.CHECKING, now);
+				}
+			}
 			case CHECKING -> {
-				checkAnswer(config, now);
+				if (session != null) {
+					checkAnswer(config, now);
+				}
 
 				long waited = now - phaseStart;
 				boolean done = isServerGame()
 						? waited >= SERVER_VERDICT_MILLIS
-						: session.isFinished() || waited >= CHECK_GRACE_MILLIS;
+						: session == null || session.isFinished() || waited >= CHECK_GRACE_MILLIS;
 
 				if (phase == Phase.CHECKING && done) {
 					enter(Phase.TIMED_OUT, now);
@@ -143,11 +161,15 @@ public final class Challenge {
 				}
 			}
 			case CLEARED -> {
-				enter(Phase.CLEARED, now);
+				// After a wrong pick the card keeps showing the right word.
+				if (phase != Phase.WRONG) {
+					enter(Phase.CLEARED, now);
+				}
+
 				playSound("entity.item.break", 0.8f);
 			}
 			case TIMED_OUT -> {
-				if (phase != Phase.TIMED_OUT) {
+				if (phase != Phase.TIMED_OUT && phase != Phase.WRONG) {
 					enter(Phase.TIMED_OUT, now);
 					playSound("entity.villager.no", 1.0f);
 				}
@@ -164,11 +186,25 @@ public final class Challenge {
 
 	boolean isOver(long now) {
 		return over || switch (phase) {
-			case CORRECT, TIMED_OUT, CLEARED -> now - phaseStart >= RESULT_MILLIS;
+			case CORRECT, WRONG, TIMED_OUT, CLEARED -> now - phaseStart >= RESULT_MILLIS;
 			case DROPPED -> now - phaseStart >= DROPPED_MILLIS;
 			case FLASHCARD -> now - phaseStart >= answerMillis;
 			default -> false;
 		};
+	}
+
+	/** Picks quiz answer {@code index} (an answer key was pressed). */
+	boolean choose(int index) {
+		if (phase != Phase.QUIZ || index < 0 || index >= options.size()) {
+			return false;
+		}
+
+		boolean right = options.get(index).equals(word);
+		long now = System.currentTimeMillis();
+		enter(right ? Phase.CORRECT : Phase.WRONG, now);
+		playSound(right ? "entity.player.levelup" : "entity.villager.no", right ? 1.4f : 1.0f);
+		sendVerdict(right ? Verdict.CORRECT : Verdict.WRONG);
+		return true;
 	}
 
 	/** Throws away the words heard so far (the "clear" key). */
@@ -195,19 +231,28 @@ public final class Challenge {
 		return heard;
 	}
 
-	/** Why the challenge fell back to a flashcard. */
+	/** Why the challenge fell back to the quiz or a flashcard. */
 	public String note() {
 		return note;
 	}
 
+	public List<String> options() {
+		return options;
+	}
+
+	/** Pronunciation of each option, or null entries for Latin-script words. */
+	public List<String> optionSubtitles() {
+		return optionSubtitles;
+	}
+
 	/** 1 -> 0 while the clock runs. */
 	public float timeLeftFraction(long now) {
-		long total = phase == Phase.FLASHCARD || phase == Phase.LISTENING ? answerMillis : 0;
+		long total = phase == Phase.FLASHCARD || phase == Phase.LISTENING || phase == Phase.QUIZ ? answerMillis : 0;
 		return total == 0 ? 0 : Math.clamp(1f - (float) (now - phaseStart) / total, 0f, 1f);
 	}
 
 	public int secondsLeft(long now) {
-		return phase == Phase.LISTENING ? (int) Math.ceil(Math.max(0, answerMillis - (now - phaseStart)) / 1000.0) : 0;
+		return phase == Phase.LISTENING || phase == Phase.QUIZ ? (int) Math.ceil(Math.max(0, answerMillis - (now - phaseStart)) / 1000.0) : 0;
 	}
 
 	private void startListening(SpeechService speech, long now) {
@@ -220,7 +265,7 @@ public final class Challenge {
 			}
 		} catch (Exception e) {
 			SayItMod.LOGGER.warn("Could not open the microphone", e);
-			showFlashcard(e.getMessage() == null ? "no microphone" : e.getMessage(), now);
+			startQuiz(e.getMessage() == null ? "no microphone" : e.getMessage(), now);
 		}
 	}
 
@@ -238,9 +283,32 @@ public final class Challenge {
 			enter(Phase.CORRECT, now);
 			playSound("entity.player.levelup", 1.4f);
 
-			if (isServerGame()) {
-				ClientPlayNetworking.send(new SayItPayloads.Answer(serverId, true));
-			}
+			sendVerdict(Verdict.CORRECT);
+		}
+	}
+
+	/** Without speech the player picks the word from three; the server clock starts now. */
+	private void startQuiz(String reason, long now) {
+		List<String> picks = QuizOptions.build(word, languageCode, new Random());
+
+		if (picks == null) {
+			showFlashcard(reason, now);
+			return;
+		}
+
+		List<String> subtitles = new ArrayList<>();
+
+		for (String option : picks) {
+			subtitles.add(Romanizer.subtitle(option, languageCode));
+		}
+
+		options = picks;
+		optionSubtitles = subtitles;
+		note = reason;
+		enter(Phase.QUIZ, now);
+
+		if (isServerGame()) {
+			ClientPlayNetworking.send(new SayItPayloads.Listening(serverId));
 		}
 	}
 
@@ -248,9 +316,13 @@ public final class Challenge {
 		note = reason;
 		enter(Phase.FLASHCARD, now);
 
-		// Without speech the player cannot win, so the server game must not take the item.
+		// The player cannot answer at all, so the server game must not take the item.
+		sendVerdict(Verdict.UNJUDGEABLE);
+	}
+
+	private void sendVerdict(Verdict verdict) {
 		if (isServerGame()) {
-			ClientPlayNetworking.send(new SayItPayloads.Answer(serverId, false));
+			ClientPlayNetworking.send(new SayItPayloads.Answer(serverId, verdict.ordinal()));
 		}
 	}
 

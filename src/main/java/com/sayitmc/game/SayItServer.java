@@ -89,7 +89,9 @@ public final class SayItServer {
 
 			if (game != null && learned != null) {
 				String language = config.language;
-				game.answer(payload.id(), payload.correct(), item -> learned.add(uuid(player), language, item), actions(player));
+				Verdict verdict = Verdict.byId(payload.verdict());
+				boolean held = heldItems(player).contains(game.runningItem());
+				game.answer(payload.id(), verdict, held, item -> learned.add(uuid(player), language, item), ticks, config, actions(player));
 			}
 		});
 		ServerPlayNetworking.registerGlobalReceiver(SayItPayloads.Forget.TYPE, (payload, context) -> {

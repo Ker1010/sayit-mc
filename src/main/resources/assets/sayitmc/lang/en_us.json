@@ -10,5 +10,11 @@
 	"sayitmc.hud.cleared": "✘ Time's up! Item cleared",
 	"sayitmc.hud.dropped": "dropped - timer reset",
 	"key.category.sayitmc.main": "Say It!",
-	"key.sayitmc.clear_heard": "Clear misheard words"
+	"key.sayitmc.clear_heard": "Clear misheard words",
+	"sayitmc.hud.quiz_header": "PICK THE %s WORD",
+	"sayitmc.hud.quiz": "no mic: press %s / %s / %s",
+	"sayitmc.hud.wrong": "✘ Wrong!",
+	"key.sayitmc.answer_1": "Quiz answer 1",
+	"key.sayitmc.answer_2": "Quiz answer 2",
+	"key.sayitmc.answer_3": "Quiz answer 3"
 }

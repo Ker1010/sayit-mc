@@ -1,5 +1,8 @@
 package com.sayitmc.client;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -51,8 +54,11 @@ public final class ChallengeHud {
 
 		Font font = Minecraft.getInstance().font;
 		Challenge.Phase phase = challenge.phase();
-		String header = I18n.get("sayitmc.hud.header", Languages.displayName(challenge.languageCode));
-		String timer = phase == Challenge.Phase.LISTENING ? challenge.secondsLeft(now) + "s" : "";
+		boolean quiz = phase == Challenge.Phase.QUIZ;
+		String language = Languages.displayName(challenge.languageCode);
+		String header = I18n.get(quiz ? "sayitmc.hud.quiz_header" : "sayitmc.hud.header", language);
+		String timer = phase == Challenge.Phase.LISTENING || quiz ? challenge.secondsLeft(now) + "s" : "";
+		List<String> choices = quiz ? quizLines(challenge) : List.of();
 		String subtitle = challenge.subtitle == null ? null : "(" + challenge.subtitle + ")";
 		int accent = accentColor(phase);
 
@@ -66,6 +72,10 @@ public final class ChallengeHud {
 			textWidth = Math.max(textWidth, width(font, subtitle));
 		}
 
+		for (String choice : choices) {
+			textWidth = Math.max(textWidth, width(font, choice));
+		}
+
 		textWidth = Math.min(textWidth, maxTextWidth);
 		String status = phase == Challenge.Phase.LISTENING || phase == Challenge.Phase.CHECKING
 				? fitEnd(font, statusLine(challenge), textWidth)
@@ -75,7 +85,9 @@ public final class ChallengeHud {
 		int width = TEXT_LEFT + textWidth + PADDING_RIGHT;
 		int wordTop = 20;
 		int subtitleTop = wordTop + Math.round(LINE_HEIGHT * wordScale) + 2;
-		int barTop = subtitle == null ? subtitleTop + 1 : subtitleTop + LINE_HEIGHT + 3;
+		int barTop = quiz
+				? wordTop + choices.size() * (LINE_HEIGHT + 3) + 1
+				: subtitle == null ? subtitleTop + 1 : subtitleTop + LINE_HEIGHT + 3;
 		int statusTop = barTop + 7;
 		int height = statusTop + LINE_HEIGHT + 6;
 
@@ -99,13 +111,20 @@ public final class ChallengeHud {
 			text(graphics, font, timer, textX + textWidth - width(font, timer), y + 7, WHITE);
 		}
 
-		graphics.pose().pushMatrix();
-		graphics.pose().translate(textX, y + wordTop);
-		graphics.pose().scale(wordScale);
-		text(graphics, font, challenge.word, 0, 0, phase == Challenge.Phase.CORRECT ? GREEN : GOLD);
-		graphics.pose().popMatrix();
+		if (quiz) {
+			for (int i = 0; i < choices.size(); i++) {
+				text(graphics, font, fit(font, choices.get(i), textWidth), textX, y + wordTop + i * (LINE_HEIGHT + 3), GOLD);
+			}
+		} else {
+			int wordColor = phase == Challenge.Phase.CORRECT ? GREEN : phase == Challenge.Phase.WRONG ? RED : GOLD;
+			graphics.pose().pushMatrix();
+			graphics.pose().translate(textX, y + wordTop);
+			graphics.pose().scale(wordScale);
+			text(graphics, font, challenge.word, 0, 0, wordColor);
+			graphics.pose().popMatrix();
+		}
 
-		if (subtitle != null) {
+		if (subtitle != null && !quiz) {
 			text(graphics, font, subtitle, textX, y + subtitleTop, LIGHT);
 		}
 
@@ -126,7 +145,9 @@ public final class ChallengeHud {
 			case LISTENING, CHECKING -> challenge.heard().isEmpty()
 					? I18n.get("sayitmc.hud.listening", SayItClient.clearKeyName())
 					: I18n.get("sayitmc.hud.heard", challenge.heard());
+			case QUIZ -> I18n.get("sayitmc.hud.quiz", SayItClient.answerKeyName(0), SayItClient.answerKeyName(1), SayItClient.answerKeyName(2));
 			case CORRECT -> I18n.get("sayitmc.hud.correct");
+			case WRONG -> I18n.get("sayitmc.hud.wrong");
 			case TIMED_OUT -> I18n.get("sayitmc.hud.timeout");
 			case CLEARED -> I18n.get("sayitmc.hud.cleared");
 			case DROPPED -> I18n.get("sayitmc.hud.dropped");
@@ -139,17 +160,17 @@ public final class ChallengeHud {
 			case PREPARING -> SayItClient.speech().state() == SpeechService.State.DOWNLOADING
 					? (float) SayItClient.speech().downloadProgress()
 					: 0f;
-			case LISTENING, FLASHCARD -> challenge.timeLeftFraction(now);
+			case LISTENING, QUIZ, FLASHCARD -> challenge.timeLeftFraction(now);
 			case CORRECT -> 1f;
-			case CHECKING, TIMED_OUT, CLEARED, DROPPED -> 0f;
+			case CHECKING, WRONG, TIMED_OUT, CLEARED, DROPPED -> 0f;
 		};
 	}
 
 	private static int accentColor(Challenge.Phase phase) {
 		return switch (phase) {
-			case LISTENING, CHECKING -> GOLD;
+			case LISTENING, QUIZ, CHECKING -> GOLD;
 			case CORRECT -> GREEN;
-			case TIMED_OUT, CLEARED -> RED;
+			case WRONG, TIMED_OUT, CLEARED -> RED;
 			case PREPARING, DROPPED, FLASHCARD -> MUTED;
 		};
 	}
@@ -157,9 +178,22 @@ public final class ChallengeHud {
 	private static int statusColor(Challenge.Phase phase) {
 		return switch (phase) {
 			case CORRECT -> GREEN;
-			case TIMED_OUT, CLEARED -> RED;
+			case WRONG, TIMED_OUT, CLEARED -> RED;
 			default -> LIGHT;
 		};
+	}
+
+	/** "[Z] 小麦 (komugi)" for each quiz option. */
+	private static List<String> quizLines(Challenge challenge) {
+		List<String> lines = new ArrayList<>();
+		List<String> options = challenge.options();
+
+		for (int i = 0; i < options.size(); i++) {
+			String sub = challenge.optionSubtitles().get(i);
+			lines.add("[" + SayItClient.answerKeyName(i) + "] " + options.get(i) + (sub == null ? "" : " (" + sub + ")"));
+		}
+
+		return lines;
 	}
 
 	private static void text(GuiGraphicsExtractor graphics, Font font, String text, int x, int y, int color) {

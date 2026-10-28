@@ -28,7 +28,7 @@ public final class SayItPayloads {
 	}
 
 	/** Bumped when packets change, so mismatched mod versions ignore each other instead of failing to decode. */
-	private static final String PROTOCOL = "v4/";
+	private static final String PROTOCOL = "v5/";
 
 	private static <T extends CustomPacketPayload> CustomPacketPayload.Type<T> payloadType(String path) {
 		return new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(SayItMod.MOD_ID, PROTOCOL + path));
@@ -72,18 +72,18 @@ public final class SayItPayloads {
 		}
 	}
 
-	/** Client -> server: the word was said ({@code correct}), or the client cannot judge it. */
-	public record Answer(int id, boolean correct) implements CustomPacketPayload {
+	/** Client -> server: the player's answer, see {@link com.sayitmc.game.Verdict}. */
+	public record Answer(int id, int verdict) implements CustomPacketPayload {
 		public static final Type<Answer> TYPE = payloadType("answer");
 		public static final StreamCodec<FriendlyByteBuf, Answer> CODEC = CustomPacketPayload.codec(Answer::write, Answer::new);
 
 		private Answer(FriendlyByteBuf buf) {
-			this(buf.readVarInt(), buf.readBoolean());
+			this(buf.readVarInt(), buf.readVarInt());
 		}
 
 		private void write(FriendlyByteBuf buf) {
 			buf.writeVarInt(id);
-			buf.writeBoolean(correct);
+			buf.writeVarInt(verdict);
 		}
 
 		@Override
