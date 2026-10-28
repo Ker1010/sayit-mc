@@ -271,7 +271,7 @@ public final class Challenge {
 			enter(Phase.LISTENING, now);
 
 			if (isServerGame()) {
-				ClientPlayNetworking.send(new SayItPayloads.Listening(serverId));
+				ClientPlayNetworking.send(new SayItPayloads.Listening(serverId, word));
 			}
 		} catch (Exception e) {
 			opening = null;
@@ -345,7 +345,7 @@ public final class Challenge {
 		enter(Phase.QUIZ, now);
 
 		if (isServerGame()) {
-			ClientPlayNetworking.send(new SayItPayloads.Listening(serverId));
+			ClientPlayNetworking.send(new SayItPayloads.Listening(serverId, word));
 		}
 	}
 

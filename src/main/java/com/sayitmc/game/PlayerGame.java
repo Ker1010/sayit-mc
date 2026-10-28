@@ -45,6 +45,8 @@ public final class PlayerGame {
 		/** False while waiting for the client to load speech and open the microphone. */
 		boolean counting;
 		long since;
+		/** The word as the client shows it, for the name tag. */
+		String word = "";
 
 		Running(int id, String itemId, long since) {
 			this.id = id;
@@ -141,12 +143,28 @@ public final class PlayerGame {
 		}
 	}
 
-	/** The client is listening now, so the countdown starts. */
-	public void listening(int id, long now) {
+	/** The client is listening now, so the countdown starts. {@code word} is the item's name the player must say. */
+	public void listening(int id, long now, String word) {
 		if (running != null && running.id == id && !running.counting) {
 			running.counting = true;
 			running.since = now;
+			running.word = word;
 		}
+	}
+
+	/** Seconds left on the running countdown, or -1 when nothing is counting down. */
+	public int secondsLeft(long now, ServerConfig config) {
+		if (running == null || !running.counting) {
+			return -1;
+		}
+
+		long ticksLeft = config.secondsToAnswer * 20L - (now - running.since);
+		return (int) Math.max(0, (ticksLeft + 19) / 20);
+	}
+
+	/** The word the player is being asked, as their client named it. */
+	public String runningWord() {
+		return running == null ? "" : running.word;
 	}
 
 	/**

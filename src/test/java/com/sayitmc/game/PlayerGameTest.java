@@ -58,7 +58,7 @@ class PlayerGameTest {
 		tick("minecraft:dirt", "minecraft:wheat");
 		assertEquals(List.of("start 1 minecraft:wheat 10"), log);
 
-		game.listening(1, now);
+		game.listening(1, now, "Weizen");
 		advance(TIMEOUT_TICKS, "minecraft:dirt", "minecraft:wheat");
 		assertEquals(List.of("start 1 minecraft:wheat 10"), log, "still within the grace period");
 
@@ -76,7 +76,7 @@ class PlayerGameTest {
 	@Test
 	void droppingTheItemResetsItsTimer() {
 		tick("minecraft:wheat");
-		game.listening(1, now);
+		game.listening(1, now, "Weizen");
 		advance(100, "minecraft:wheat");
 		drop("minecraft:wheat");
 		assertEquals("end 1 DROPPED", log.get(1));
@@ -84,7 +84,7 @@ class PlayerGameTest {
 		// Picked up again: a fresh challenge with a full timer.
 		tick("minecraft:wheat");
 		assertEquals("start 2 minecraft:wheat 10", log.get(2));
-		game.listening(2, now);
+		game.listening(2, now, "Weizen");
 		advance(TIMEOUT_TICKS, "minecraft:wheat");
 		assertEquals(3, log.size(), "the new timer has not run out yet");
 	}
@@ -92,7 +92,7 @@ class PlayerGameTest {
 	@Test
 	void correctAnswerIsLearnedAndNeverAskedAgain() {
 		tick("minecraft:wheat");
-		game.listening(1, now);
+		game.listening(1, now, "Weizen");
 		game.answer(1, Verdict.CORRECT, true, learned::add, now, config, actions);
 		assertEquals(List.of("start 1 minecraft:wheat 10", "end 1 CORRECT"), log);
 		assertTrue(learned.contains("minecraft:wheat"));
@@ -106,7 +106,7 @@ class PlayerGameTest {
 	@Test
 	void puttingTheItemAwayDoesNotSaveIt() {
 		tick("minecraft:wheat");
-		game.listening(1, now);
+		game.listening(1, now, "Weizen");
 		tick();
 		assertEquals(1, log.size(), "stashing (chest, bundle) does not reset the timer");
 
@@ -120,7 +120,7 @@ class PlayerGameTest {
 	@Test
 	void stashedItemThatComesBackInTimeKeepsItsTimer() {
 		tick("minecraft:wheat");
-		game.listening(1, now);
+		game.listening(1, now, "Weizen");
 		advance(50);
 		advance(50, "minecraft:wheat");
 		assertEquals(1, log.size());
@@ -129,9 +129,20 @@ class PlayerGameTest {
 	}
 
 	@Test
+	void countdownForTheNameTag() {
+		tick("minecraft:wheat");
+		assertEquals(-1, game.secondsLeft(now, config), "not counting until the client listens");
+		game.listening(1, now, "Weizen");
+		assertEquals(10, game.secondsLeft(now, config));
+		advance(21, "minecraft:wheat");
+		assertEquals(9, game.secondsLeft(now, config));
+		assertEquals("Weizen", game.runningWord());
+	}
+
+	@Test
 	void wrongQuizAnswerClearsRightAway() {
 		tick("minecraft:wheat");
-		game.listening(1, now);
+		game.listening(1, now, "Weizen");
 		game.answer(1, Verdict.WRONG, true, learned::add, now, config, actions);
 		assertEquals(List.of("start 1 minecraft:wheat 10", "clear minecraft:wheat", "end 1 CLEARED"), log);
 		assertTrue(learned.isEmpty());
@@ -179,7 +190,7 @@ class PlayerGameTest {
 	void clearingCanBeTurnedOff() {
 		config.clearItemsOnTimeout = false;
 		tick("minecraft:wheat");
-		game.listening(1, now);
+		game.listening(1, now, "Weizen");
 		advance(TIMEOUT_TICKS + 1, "minecraft:wheat");
 		assertEquals(List.of("start 1 minecraft:wheat 10", "end 1 TIMED_OUT"), log);
 	}

@@ -35,6 +35,7 @@ import com.sayitmc.network.SayItPayloads;
 public final class SayItServer {
 	private final Path configFile = FabricLoader.getInstance().getConfigDir().resolve("sayitmc-server.json");
 	private final Map<UUID, PlayerGame> games = new HashMap<>();
+	private final NameTags nameTags = new NameTags();
 	/** When each online player joined, to find the ones whose client never says hello. */
 	private final Map<UUID, Long> joinedAt = new HashMap<>();
 	/** Item ids that appeared on the ground next to each player during this tick. */
@@ -51,6 +52,7 @@ public final class SayItServer {
 	public void register() {
 		ServerLifecycleEvents.SERVER_STARTED.register(this::start);
 		ServerLifecycleEvents.SERVER_STOPPING.register(stopping -> {
+			nameTags.removeAll(stopping);
 			games.clear();
 			server = null;
 		});
@@ -59,6 +61,7 @@ public final class SayItServer {
 		ServerPlayConnectionEvents.JOIN.register((listener, sender, joined) -> joinedAt.put(uuid(listener.player), ticks));
 		ServerPlayConnectionEvents.DISCONNECT.register((listener, disconnected) -> {
 			games.remove(uuid(listener.player));
+			nameTags.forget(server, listener.player);
 			joinedAt.remove(uuid(listener.player));
 		});
 		ServerTickEvents.END_SERVER_TICK.register(this::tick);
@@ -80,7 +83,7 @@ public final class SayItServer {
 			PlayerGame game = games.get(uuid(context.player()));
 
 			if (game != null) {
-				game.listening(payload.id(), ticks);
+				game.listening(payload.id(), ticks, payload.word());
 			}
 		});
 		ServerPlayNetworking.registerGlobalReceiver(SayItPayloads.Answer.TYPE, (payload, context) -> {
@@ -144,6 +147,7 @@ public final class SayItServer {
 	private void start(MinecraftServer started) {
 		server = started;
 		games.clear();
+		nameTags.removeAll(started);
 		joinedAt.clear();
 		config = ServerConfig.load(configFile);
 		learned = new LearnedStore(started.getWorldPath(LevelResource.DATA).resolve("sayitmc").resolve("learned.json"));
@@ -188,6 +192,12 @@ public final class SayItServer {
 
 			Set<String> dropped = droppedThisTick.getOrDefault(id, Set.of());
 			game.tick(ticks, heldItems(player), item -> learned.contains(id, language, item), dropped::contains, config, actions(player));
+
+			if (config.showChallengeAboveHead) {
+				nameTags.update(ticking, player, game, ticks, config);
+			} else {
+				nameTags.set(ticking, player, null);
+			}
 		}
 
 		droppedThisTick.clear();
@@ -222,6 +232,7 @@ public final class SayItServer {
 			@Override
 			public void endChallenge(int id, Outcome outcome) {
 				ServerPlayNetworking.send(player, new SayItPayloads.Result(id, outcome.ordinal()));
+				nameTags.flash(player, outcome, ticks);
 			}
 
 			@Override

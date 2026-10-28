@@ -37,6 +37,8 @@ public final class ServerConfig {
 	public int rememberStashedItemsMinutes = 30;
 	/** How long to wait for a player's speech model to download before giving up on a challenge. */
 	public int waitForClientSeconds = 60;
+	/** Show the word and countdown above the challenged player's head, for everyone to see. */
+	public boolean showChallengeAboveHead = true;
 	/** Kick players whose client does not have the mod, and do not let anyone turn the game off. */
 	public boolean requireMod = true;
 	public String requireModMessage = "This server plays Say It! Install the Say It! mod (sayit-mc) and Fabric API for Minecraft 26.3 to join.";

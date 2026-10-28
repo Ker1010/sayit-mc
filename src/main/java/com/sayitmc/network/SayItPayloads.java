@@ -27,8 +27,11 @@ public final class SayItPayloads {
 		PayloadTypeRegistry.clientboundPlay().register(Result.TYPE, Result.CODEC);
 	}
 
+	/** Longest item name a client may send for the name tag. */
+	private static final int MAX_WORD_LENGTH = 64;
+
 	/** Bumped when packets change, so mismatched mod versions ignore each other instead of failing to decode. */
-	private static final String PROTOCOL = "v6/";
+	private static final String PROTOCOL = "v7/";
 
 	private static <T extends CustomPacketPayload> CustomPacketPayload.Type<T> payloadType(String path) {
 		return new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(SayItMod.MOD_ID, PROTOCOL + path));
@@ -54,16 +57,17 @@ public final class SayItPayloads {
 	}
 
 	/** Client -> server: the microphone is open, start the countdown. */
-	public record Listening(int id) implements CustomPacketPayload {
+	public record Listening(int id, String word) implements CustomPacketPayload {
 		public static final Type<Listening> TYPE = payloadType("listening");
 		public static final StreamCodec<FriendlyByteBuf, Listening> CODEC = CustomPacketPayload.codec(Listening::write, Listening::new);
 
 		private Listening(FriendlyByteBuf buf) {
-			this(buf.readVarInt());
+			this(buf.readVarInt(), buf.readUtf(MAX_WORD_LENGTH));
 		}
 
 		private void write(FriendlyByteBuf buf) {
 			buf.writeVarInt(id);
+			buf.writeUtf(word, MAX_WORD_LENGTH);
 		}
 
 		@Override

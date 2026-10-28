@@ -22,6 +22,7 @@ A Fabric mod for **Minecraft Java 26.3**. Every time you get an item you have no
 - One word at a time; other new items wait their turn.
 - **The server picks the language** — everyone on it learns the same one, and players cannot change it.
 - **Every player plays for themselves**: their own microphone, their own timer, their own learned items.
+- Everyone can see what a player is being asked: the word and countdown appear after their name above their head.
 
 Item names come from Minecraft's own translations, so every language the game has works and your game UI can stay
 in English. Words not written in Latin letters get a **pronunciation subtitle**:
@@ -88,6 +89,7 @@ Server rules — `config/sayitmc-server.json` on the server (or your own game fo
 | `quizItemsAlreadyInInventory` | `false` | Also ask for what players carry when they join |
 | `waitForClientSeconds` | `60` | How long to wait for a player's speech model download |
 | `rememberStashedItemsMinutes` | `30` | How long an item whose time ran out while stashed away stays marked for clearing |
+| `showChallengeAboveHead` | `true` | Show the word and countdown after the player's name (`Steve [小麦 7s]`) |
 | `requireMod` | `true` | Kick players who join without the mod, and nobody can use `/sayit off` |
 | `requireModMessage` | | The message those players see when kicked |
 
