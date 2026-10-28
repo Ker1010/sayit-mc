@@ -25,8 +25,12 @@ public final class ServerConfig {
 	public double matchThreshold = 0.85;
 	/** How sure the speech recognizer must be of each word (0-1) when it hears one of the listed words. */
 	public double minConfidence = 0.8;
-	/** After missing the same item this many times, the miss shows the answer and how to say it (0 = never). */
-	public int revealAnswerAfterMisses = 3;
+	/**
+	 * After failing to say the same item this many times, the player gets a private "Google this word?" message
+	 * linking to its pronunciation, and again every this many misses after (0 = never). Not sent for quizzes,
+	 * where it would give the answer away.
+	 */
+	public int googleHintAfterMisses = 3;
 	/** Take the item away when its timer runs out. Turn off for practice without losing items. */
 	public boolean clearItemsOnTimeout = true;
 	public boolean includeCreativePlayers = false;
@@ -94,7 +98,7 @@ public final class ServerConfig {
 		minConfidence = Math.clamp(minConfidence, 0.0, 1.0);
 		waitForClientSeconds = Math.clamp(waitForClientSeconds, 5, 600);
 		rememberStashedItemsMinutes = Math.clamp(rememberStashedItemsMinutes, 0, 24 * 60);
-		revealAnswerAfterMisses = Math.clamp(revealAnswerAfterMisses, 0, 100);
+		googleHintAfterMisses = Math.clamp(googleHintAfterMisses, 0, 100);
 
 		if (requireModMessage == null || requireModMessage.isBlank()) {
 			requireModMessage = new ServerConfig().requireModMessage;

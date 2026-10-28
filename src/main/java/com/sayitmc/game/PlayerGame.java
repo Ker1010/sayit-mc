@@ -18,7 +18,8 @@ public final class PlayerGame {
 	public interface Actions {
 		void startChallenge(int id, String itemId, int seconds);
 
-		void endChallenge(int id, String itemId, Outcome outcome);
+		/** @param word what the player had to say ("?" for a quiz, empty if the client never started) */
+		void endChallenge(int id, String itemId, String word, Outcome outcome);
 
 		void clearItem(String itemId);
 
@@ -279,6 +280,6 @@ public final class PlayerGame {
 	private void finish(Outcome outcome, Actions actions) {
 		Running ended = running;
 		running = null;
-		actions.endChallenge(ended.id, ended.itemId, outcome);
+		actions.endChallenge(ended.id, ended.itemId, ended.word, outcome);
 	}
 }

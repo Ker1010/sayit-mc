@@ -1,5 +1,6 @@
 package com.sayitmc.game;
 
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -9,7 +10,10 @@ import java.util.Set;
 import java.util.UUID;
 
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -257,23 +261,34 @@ public final class SayItServer {
 		}
 	}
 
-	/** Keeps count of misses per item; true when this miss should show the answer. */
-	private boolean countMiss(Entity player, String itemId, Outcome outcome) {
+	/** Keeps count of misses per item; returns the misses so far (0 when this was not a miss). */
+	private int countMiss(Entity player, String itemId, Outcome outcome) {
 		if (misses == null) {
-			return false;
+			return 0;
 		}
 
 		return switch (outcome) {
-			case CLEARED, TIMED_OUT -> {
-				int total = misses.add(uuid(player), config.language, itemId);
-				yield config.revealAnswerAfterMisses > 0 && total >= config.revealAnswerAfterMisses;
-			}
+			case CLEARED, TIMED_OUT -> misses.add(uuid(player), config.language, itemId);
 			case CORRECT -> {
 				misses.clear(uuid(player), config.language, itemId);
-				yield false;
+				yield 0;
 			}
-			default -> false;
+			default -> 0;
 		};
+	}
+
+	/** A private chat message with a link to hear the word, for a player who keeps failing to say it. */
+	private void sendGoogleHint(ServerPlayer player, String word, int misses) {
+		String from = GoogleTranslate.language(config.language);
+		String to = GoogleTranslate.language(player.clientInformation().language());
+		URI link = GoogleTranslate.link(word, from, to.equals(from) ? "en" : to);
+		MutableComponent message = Component.literal("Say It!: you missed " + word + " " + misses + " times. ").withColor(0xAAAAAA)
+				.append(Component.literal("Google this word?").withStyle(style -> style
+						.withClickEvent(new ClickEvent.OpenUrl(link))
+						.withHoverEvent(new HoverEvent.ShowText(Component.literal("Hear how " + word + " is said")))
+						.withUnderlined(true)
+						.withColor(0x55AAFF)));
+		player.sendSystemMessage(message);
 	}
 
 	private void sendRules(ServerPlayer player) {
@@ -289,9 +304,16 @@ public final class SayItServer {
 			}
 
 			@Override
-			public void endChallenge(int id, String itemId, Outcome outcome) {
-				ServerPlayNetworking.send(player, new SayItPayloads.Result(id, outcome.ordinal(), countMiss(player, itemId, outcome)));
+			public void endChallenge(int id, String itemId, String word, Outcome outcome) {
+				ServerPlayNetworking.send(player, new SayItPayloads.Result(id, outcome.ordinal()));
 				nameTags.flash(player, outcome, ticks);
+				int misses = countMiss(player, itemId, outcome);
+				int every = config.googleHintAfterMisses;
+				boolean spoken = !word.isEmpty() && !word.equals("?");
+
+				if (spoken && every > 0 && misses > 0 && misses % every == 0) {
+					sendGoogleHint(player, word, misses);
+				}
 			}
 
 			@Override

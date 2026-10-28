@@ -55,17 +55,14 @@ public final class ChallengeHud {
 		Font font = Minecraft.getInstance().font;
 		Challenge.Phase phase = challenge.phase();
 		boolean quiz = phase == Challenge.Phase.QUIZ;
-		boolean revealed = challenge.revealed();
-		// After a quiz the answer stays hidden, unless it was picked or the server allows showing it.
-		boolean showOptions = challenge.wasQuiz() && phase != Challenge.Phase.CORRECT && !revealed;
+		// After a quiz the answer stays hidden unless it was picked.
+		boolean showOptions = challenge.wasQuiz() && phase != Challenge.Phase.CORRECT;
 		String language = Languages.displayName(challenge.languageCode,
 				Languages.locale(Minecraft.getInstance().getLanguageManager().getSelected()));
-		String headerKey = revealed ? "sayitmc.hud.answer_header" : showOptions ? "sayitmc.hud.quiz_header" : "sayitmc.hud.header";
-		String header = I18n.get(headerKey, language);
+		String header = I18n.get(showOptions ? "sayitmc.hud.quiz_header" : "sayitmc.hud.header", language);
 		String timer = phase == Challenge.Phase.LISTENING || quiz ? challenge.secondsLeft(now) + "s" : "";
 		List<String> choices = showOptions ? quizLines(challenge) : List.of();
-		String reading = revealed ? challenge.answerReading() : challenge.subtitle;
-		String subtitle = reading == null ? null : "(" + reading + ")";
+		String subtitle = challenge.subtitle == null ? null : "(" + challenge.subtitle + ")";
 		int accent = accentColor(phase);
 
 		int maxTextWidth = Math.max(80, graphics.guiWidth() - 2 * MARGIN - TEXT_LEFT - PADDING_RIGHT);
@@ -122,8 +119,7 @@ public final class ChallengeHud {
 				text(graphics, font, fit(font, choices.get(i), textWidth), textX, y + wordTop + i * (LINE_HEIGHT + 3), quiz ? GOLD : MUTED);
 			}
 		} else {
-			int wordColor = phase == Challenge.Phase.CORRECT ? GREEN
-					: revealed || phase == Challenge.Phase.WRONG ? RED : GOLD;
+			int wordColor = phase == Challenge.Phase.CORRECT ? GREEN : phase == Challenge.Phase.WRONG ? RED : GOLD;
 			graphics.pose().pushMatrix();
 			graphics.pose().translate(textX, y + wordTop);
 			graphics.pose().scale(wordScale);

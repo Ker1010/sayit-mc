@@ -85,8 +85,6 @@ public final class Challenge {
 	private String note = "";
 	private List<String> options = List.of();
 	private List<String> optionSubtitles = List.of();
-	/** The server allows showing the answer: this item has been missed often enough. */
-	private boolean revealed;
 
 	private Challenge(int serverId, ItemStack stack, String itemId, String languageCode, String word, long answerMillis) {
 		this.serverId = serverId;
@@ -170,10 +168,9 @@ public final class Challenge {
 		}
 	}
 
-	/** The server's verdict for a server challenge; {@code reveal} lets this miss show the answer. */
-	void serverResult(Outcome outcome, boolean reveal, long now) {
+	/** The server's verdict for a server challenge. */
+	void serverResult(Outcome outcome, long now) {
 		closeSession();
-		revealed = reveal && (outcome == Outcome.CLEARED || outcome == Outcome.TIMED_OUT);
 
 		switch (outcome) {
 			case CORRECT -> {
@@ -259,24 +256,9 @@ public final class Challenge {
 		return note;
 	}
 
-	/** The card was a quiz, so the answer must stay hidden unless it was picked or {@link #revealed()}. */
+	/** The card was a quiz, so the answer must stay hidden unless it was picked. */
 	public boolean wasQuiz() {
 		return !options.isEmpty();
-	}
-
-	public boolean revealed() {
-		return revealed;
-	}
-
-	/** How to say the answer, shown with it when revealed: {@code こむぎ · komugi}. */
-	public String answerReading() {
-		String kana = Romanizer.kanaReading(word, languageCode);
-
-		if (kana == null) {
-			return subtitle;
-		}
-
-		return subtitle == null ? kana : kana + " · " + subtitle;
 	}
 
 	public List<String> options() {

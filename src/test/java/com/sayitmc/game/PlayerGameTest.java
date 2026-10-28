@@ -25,7 +25,7 @@ class PlayerGameTest {
 		}
 
 		@Override
-		public void endChallenge(int id, String itemId, Outcome outcome) {
+		public void endChallenge(int id, String itemId, String word, Outcome outcome) {
 			log.add("end " + id + " " + outcome);
 		}
 

@@ -38,11 +38,11 @@ public final class ChallengeManager {
 		pendingServerChallenge = payload;
 	}
 
-	public void serverResult(int id, Outcome outcome, boolean reveal) {
+	public void serverResult(int id, Outcome outcome) {
 		if (pendingServerChallenge != null && pendingServerChallenge.id() == id) {
 			pendingServerChallenge = null;
 		} else if (current != null && current.serverId == id) {
-			current.serverResult(outcome, reveal, System.currentTimeMillis());
+			current.serverResult(outcome, System.currentTimeMillis());
 		}
 	}
 

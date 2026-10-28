@@ -50,12 +50,4 @@ class RomanizerTest {
 		assertEquals(java.util.List.of("épée en diamant"), Romanizer.speechPhrases("Épée en diamant", "fr_fr"));
 		assertEquals(java.util.List.of("jack o lantern"), Romanizer.speechPhrases("Jack o'Lantern", "en_us"));
 	}
-
-	@Test
-	void kanaReadingOfJapaneseKanji() {
-		assertEquals("こむぎ", Romanizer.kanaReading("小麦", "ja_jp"));
-		assertEquals("ダイヤモンドのけん", Romanizer.kanaReading("ダイヤモンドの剣", "ja_jp"));
-		assertNull(Romanizer.kanaReading("パン", "ja_jp"));
-		assertNull(Romanizer.kanaReading("小麦", "zh_cn"));
-	}
 }
