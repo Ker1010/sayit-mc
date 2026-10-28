@@ -39,6 +39,11 @@ final class QuizOptions {
 		return options;
 	}
 
+	/** Collects the item names now (when the rules arrive) rather than in the middle of the first challenge. */
+	static void warmUp(String language) {
+		names(language);
+	}
+
 	/** Up to {@code count} other item names, never {@code word}. */
 	static List<String> decoys(String word, String language, int count, Random random) {
 		List<String> names = names(language);

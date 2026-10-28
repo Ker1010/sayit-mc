@@ -4,6 +4,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -43,6 +45,7 @@ public final class SpeechService {
 	private Model model;
 	private Future<?> pending;
 	private ListenSession active;
+	private CompletableFuture<ListenSession> opening;
 
 	public SpeechService(Path modelsDir) {
 		this.modelsDir = modelsDir;
@@ -90,17 +93,37 @@ public final class SpeechService {
 
 	/** True when the model is loaded and the previous recording has released the microphone. */
 	public synchronized boolean canListen() {
-		return state == State.READY && (active == null || active.isFinished());
+		return state == State.READY && opening == null && (active == null || active.isFinished());
 	}
 
-	/** Opens the microphone. Only valid while {@link #canListen()}. */
-	public synchronized ListenSession listen(List<String> wordList) throws Exception {
+	/**
+	 * Opens the microphone and sets up the recognizers off the render thread (both can take a few hundred
+	 * milliseconds, which would freeze the game). Only valid while {@link #canListen()}.
+	 */
+	public synchronized CompletableFuture<ListenSession> listen(List<String> wordList) {
 		if (!canListen()) {
-			throw new IllegalStateException("speech model or microphone is not ready");
+			return CompletableFuture.failedFuture(new IllegalStateException("speech model or microphone is not ready"));
 		}
 
-		active = ListenSession.start(model, wordList);
-		return active;
+		Model loaded = model;
+		CompletableFuture<ListenSession> started = CompletableFuture.supplyAsync(() -> {
+			try {
+				return ListenSession.start(loaded, wordList);
+			} catch (Exception e) {
+				throw new CompletionException(e);
+			}
+		}, worker);
+		opening = started;
+		started.whenComplete((session, error) -> {
+			synchronized (this) {
+				if (session != null) {
+					active = session;
+				}
+
+				opening = null;
+			}
+		});
+		return started;
 	}
 
 	/** Frees the loaded model; the next {@link #prepare} starts over (and retries failed downloads). */

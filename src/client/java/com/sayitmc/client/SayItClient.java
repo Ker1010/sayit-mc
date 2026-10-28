@@ -94,6 +94,7 @@ public final class SayItClient implements ClientModInitializer {
 		serverLanguage = rules.language();
 		serverSeconds = rules.seconds();
 		serverMandatory = rules.mandatory();
+		QuizOptions.warmUp(serverLanguage);
 
 		// Start downloading the speech model now, so it is ready by the first new item.
 		if (ClientConfig.get().enabled || serverMandatory) {

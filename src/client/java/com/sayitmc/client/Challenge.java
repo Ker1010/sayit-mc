@@ -3,6 +3,7 @@ package com.sayitmc.client;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -74,6 +75,8 @@ public final class Challenge {
 	private long phaseStart = System.currentTimeMillis();
 	private boolean over;
 	private ListenSession session;
+	/** The microphone being opened in the background. */
+	private CompletableFuture<ListenSession> opening;
 	private String heard = "";
 	private int checkedGuesses;
 	private String note = "";
@@ -111,8 +114,12 @@ public final class Challenge {
 			case PREPARING -> {
 				if (expectedKey.isEmpty()) {
 					startQuiz("nothing to compare", now);
+				} else if (opening != null) {
+					if (opening.isDone()) {
+						startListening(now);
+					}
 				} else if (speech.canListen()) {
-					startListening(speech, now);
+					opening = speech.listen(wordList());
 				} else if (speech.state() == SpeechService.State.UNAVAILABLE) {
 					startQuiz(speech.problem(), now);
 				}
@@ -257,17 +264,20 @@ public final class Challenge {
 		return phase == Phase.LISTENING || phase == Phase.QUIZ ? (int) Math.ceil(Math.max(0, answerMillis - (now - phaseStart)) / 1000.0) : 0;
 	}
 
-	private void startListening(SpeechService speech, long now) {
+	private void startListening(long now) {
 		try {
-			session = speech.listen(wordList());
+			session = opening.join();
+			opening = null;
 			enter(Phase.LISTENING, now);
 
 			if (isServerGame()) {
 				ClientPlayNetworking.send(new SayItPayloads.Listening(serverId));
 			}
 		} catch (Exception e) {
-			SayItMod.LOGGER.warn("Could not open the microphone", e);
-			startQuiz(e.getMessage() == null ? "no microphone" : e.getMessage(), now);
+			opening = null;
+			Throwable cause = e.getCause() != null ? e.getCause() : e;
+			SayItMod.LOGGER.warn("Could not open the microphone", cause);
+			startQuiz(cause.getMessage() == null ? "no microphone" : cause.getMessage(), now);
 		}
 	}
 
@@ -349,6 +359,12 @@ public final class Challenge {
 	private void closeSession() {
 		if (session != null) {
 			session.close();
+		}
+
+		// Still opening: release the microphone as soon as it is open.
+		if (opening != null) {
+			opening.thenAccept(ListenSession::close);
+			opening = null;
 		}
 	}
 
