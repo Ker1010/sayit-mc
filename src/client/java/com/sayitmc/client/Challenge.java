@@ -22,7 +22,7 @@ import com.sayitmc.text.Romanizer;
 /**
  * One "say this item's name" card, from waiting for the speech model to showing the result.
  * Server challenges report to the server, which owns the timer and clears the item;
- * practice challenges (servers without the mod) only run locally.
+ * practice cards ({@code /sayit test}) only run locally.
  */
 public final class Challenge {
 	public enum Phase {
@@ -32,7 +32,7 @@ public final class Challenge {
 		/** Time is up, waiting for the last words (and, in the server game, the server's verdict). */
 		CHECKING,
 		CORRECT,
-		/** Practice mode: time ran out. */
+		/** Time ran out on a practice card, or on a server that keeps items. */
 		TIMED_OUT,
 		/** Server game: time ran out and the item was taken away. */
 		CLEARED,
@@ -169,10 +169,6 @@ public final class Challenge {
 			case FLASHCARD -> now - phaseStart >= answerMillis;
 			default -> false;
 		};
-	}
-
-	boolean wasCorrect() {
-		return phase == Phase.CORRECT;
 	}
 
 	void cancel() {

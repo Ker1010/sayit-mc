@@ -18,7 +18,8 @@ A Fabric mod for **Minecraft Java 26.3**. Every time you get an item you have no
 - **Timer hits 0** → the item is **cleared** from your inventory. Pick it up again to get another try.
 - **Drop the item** (or put it in a chest) → its **timer resets**. When you pick it up again you get a fresh timer.
 - One word at a time; other new items wait their turn.
-- **Every player plays for themselves**: their own microphone, their own language, their own learned items.
+- **The server picks the language** — everyone on it learns the same one, and players cannot change it.
+- **Every player plays for themselves**: their own microphone, their own timer, their own learned items.
 
 Item names come from Minecraft's own translations, so every language the game has works and your game UI can stay
 in English. Words not written in Latin letters get a **pronunciation subtitle**:
@@ -38,28 +39,38 @@ Requirements: Minecraft Java **26.3**, Fabric Loader **0.19.3+**, [Fabric API](h
 
 | Where | What happens |
 | --- | --- |
-| **Singleplayer** | Put `sayit-mc-0.2.0.jar` and Fabric API in `.minecraft/mods`. The full game runs. |
 | **Server** | Put the jar and Fabric API in the server's `mods` folder **and** in every player's `mods` folder. Each player with the mod plays the game; players without it can still join and are left alone. |
-| **Server without the mod** | Players who have the mod get **practice mode**: same cards and speech check, but nothing is cleared. |
+| **Singleplayer** | Put the jar and Fabric API in `.minecraft/mods`. Your game acts as the server, so the language comes from your `config/sayitmc-server.json`. |
+| **Server without the mod** | Nothing happens; the language has to come from a server running the mod. |
 
 ## Commands
 
+Server operators (permission level 2+):
+
 | Command | What it does |
 | --- | --- |
-| `/sayit` | Status: language, game or practice mode |
-| `/sayit language <code>` | Language to learn, e.g. `ja_jp`, `zh_cn`, `ko_kr`, `de_de`, `fr_fr`, `es_es` (tab-completes) |
+| `/sayitadmin` | Show the server's language and time per word |
+| `/sayitadmin language <code>` | Language everyone learns, e.g. `ja_jp`, `zh_cn`, `ko_kr`, `de_de`, `fr_fr`, `es_es` (tab-completes). Everyone's current word is cancelled; progress is kept per language |
+| `/sayitadmin time <seconds>` | Time per word (3–120) |
+
+Players:
+
+| Command | What it does |
+| --- | --- |
+| `/sayit` | Show the server's language and time |
 | `/sayit on` / `off` | Join or leave the game |
-| `/sayit test` | Practice the item in your hand (never cleared) |
+| `/sayit test` | Practice the item in your hand in the server's language (never cleared) |
 | `/sayit skip` | Skip a practice card (server words can't be skipped — drop the item instead) |
-| `/sayit time <seconds>` | Answer time in practice mode |
-| `/sayit forget` | Reset your learned items for the current language |
+| `/sayit forget` | Reset your learned items for the server's language |
 
 ## Config
 
-Server rules — `config/sayitmc-server.json` on the server (or your own game for singleplayer):
+Server rules — `config/sayitmc-server.json` on the server (or your own game for singleplayer). Edit it and run
+`/reload`, or use `/sayitadmin`:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
+| `language` | `de_de` | Minecraft language code every player learns |
 | `secondsToAnswer` | `10` | Length of each timer |
 | `clearItemsOnTimeout` | `true` | Take the item when time runs out; `false` for a friendly mode |
 | `includeCreativePlayers` | `false` | Also play in creative mode |
@@ -68,15 +79,13 @@ Server rules — `config/sayitmc-server.json` on the server (or your own game fo
 
 Learned items are saved per player in the world folder: `data/sayitmc/learned.json`.
 
-Your settings — `config/sayitmc.json`:
+Player settings — `config/sayitmc.json` (there is no language setting here on purpose):
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `language` | `de_de` | Minecraft language code to learn |
 | `enabled` | `true` | Play the game |
 | `matchThreshold` | `0.75` | How close the spoken word must be (0–1). Lower it if you keep getting rejected |
 | `speechModelUrls` | `{}` | Extra / replacement Vosk models per language |
-| `secondsToAnswer`, `retryCooldownSeconds`, `quizItemsAlreadyInInventory` | | Practice mode only |
 
 Speech models are stored in `.minecraft/sayitmc/models/`.
 
@@ -85,8 +94,9 @@ Speech models are stored in `.minecraft/sayitmc/models/`.
 Built-in model downloads: English, German, French, Spanish, Italian, Portuguese, Dutch, Russian, Ukrainian, Polish,
 Turkish, Japanese, Chinese (Mandarin), Korean, Vietnamese, Hindi, Catalan, Czech, Swedish, Esperanto, Persian.
 
-Other languages show the word and pronunciation as a flashcard without a speech check, and in the game their items
-are never cleared. You can add any [Vosk model](https://alphacephei.com/vosk/models) in `config/sayitmc.json`:
+If the server picks another language, players see the word and pronunciation as a flashcard without a speech check,
+and their items are never cleared. Players can add any [Vosk model](https://alphacephei.com/vosk/models) in
+`config/sayitmc.json`:
 
 ```json
 "speechModelUrls": {

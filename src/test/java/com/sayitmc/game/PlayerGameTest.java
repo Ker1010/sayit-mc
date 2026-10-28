@@ -38,7 +38,7 @@ class PlayerGameTest {
 
 	@BeforeEach
 	void join() {
-		game.hello("de_de", true, actions);
+		game.hello(true, actions);
 		tick("minecraft:dirt");
 	}
 
@@ -118,13 +118,21 @@ class PlayerGameTest {
 	}
 
 	@Test
-	void switchingLanguageCancelsAndStartsOver() {
+	void serverLanguageChangeCancelsAndStartsOver() {
 		tick("minecraft:wheat");
-		game.hello("ja_jp", true, actions);
+		game.reset(actions);
 		assertEquals("end 1 CANCELLED", log.get(1));
 
 		tick("minecraft:wheat");
 		assertEquals(2, log.size(), "items already held become the new baseline");
+	}
+
+	@Test
+	void turningTheGameOffCancelsAndStopsAsking() {
+		tick("minecraft:wheat");
+		game.hello(false, actions);
+		tick("minecraft:wheat", "minecraft:bread");
+		assertEquals(List.of("start 1 minecraft:wheat 10", "end 1 CANCELLED"), log);
 	}
 
 	@Test

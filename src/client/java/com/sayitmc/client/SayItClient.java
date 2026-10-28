@@ -20,54 +20,71 @@ public final class SayItClient implements ClientModInitializer {
 	private static ChallengeManager challenges;
 	/** True while connected to a server (or singleplayer world) that runs the game. */
 	private static boolean serverGame;
+	/** The language the server makes everyone learn; null until its rules arrive. */
+	private static String serverLanguage;
+	private static int serverSeconds;
 
 	@Override
 	public void onInitializeClient() {
 		ClientConfig.load();
-		LocalLearned.load();
 
 		speech = new SpeechService(FabricLoader.getInstance().getGameDir().resolve(SayItMod.MOD_ID).resolve("models"));
 		challenges = new ChallengeManager(speech);
-		ItemWatcher watcher = new ItemWatcher(challenges);
 
+		ClientPlayNetworking.registerGlobalReceiver(SayItPayloads.Rules.TYPE, (payload, context) -> applyRules(payload));
 		ClientPlayNetworking.registerGlobalReceiver(SayItPayloads.Challenge.TYPE, (payload, context) -> challenges.serverChallenge(payload));
 		ClientPlayNetworking.registerGlobalReceiver(SayItPayloads.Result.TYPE,
 				(payload, context) -> challenges.serverResult(payload.id(), Outcome.byId(payload.outcome())));
 
 		ClientPlayConnectionEvents.JOIN.register((listener, sender, client) -> {
-			watcher.reset();
 			serverGame = ClientPlayNetworking.canSend(SayItPayloads.Hello.TYPE);
+			serverLanguage = null;
 			sendHello();
-
-			if (ClientConfig.get().enabled) {
-				speech.prepare(ClientConfig.get().language);
-			}
 		});
 		ClientPlayConnectionEvents.DISCONNECT.register((listener, client) -> {
 			serverGame = false;
+			serverLanguage = null;
 			challenges.clear();
 		});
-		ClientTickEvents.END_CLIENT_TICK.register(client -> {
-			if (!serverGame) {
-				watcher.tick(client.player);
-			}
-
-			challenges.tick(client.player);
-		});
+		ClientTickEvents.END_CLIENT_TICK.register(client -> challenges.tick(client.player));
 
 		HudElementRegistry.addLast(Identifier.fromNamespaceAndPath(SayItMod.MOD_ID, "challenge"), ChallengeHud::extract);
 		ClientCommandRegistrationCallback.EVENT.register(SayItCommands::register);
 	}
 
-	/** Tells the server which language this player is learning and whether they play. */
+	private static void applyRules(SayItPayloads.Rules rules) {
+		if (!rules.language().equals(serverLanguage)) {
+			challenges.clear();
+			TargetLanguage.invalidate();
+			speech.unload();
+		}
+
+		serverLanguage = rules.language();
+		serverSeconds = rules.seconds();
+
+		// Start downloading the speech model now, so it is ready by the first new item.
+		if (ClientConfig.get().enabled) {
+			speech.prepare(serverLanguage);
+		}
+	}
+
+	/** Tells the server this player has the mod and whether they play. */
 	static void sendHello() {
 		if (serverGame) {
-			ClientPlayNetworking.send(new SayItPayloads.Hello(ClientConfig.get().language, ClientConfig.get().enabled));
+			ClientPlayNetworking.send(new SayItPayloads.Hello(ClientConfig.get().enabled));
 		}
 	}
 
 	static boolean isServerGame() {
 		return serverGame;
+	}
+
+	static String serverLanguage() {
+		return serverLanguage;
+	}
+
+	static int serverSeconds() {
+		return serverSeconds;
 	}
 
 	public static SpeechService speech() {

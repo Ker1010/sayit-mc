@@ -2,14 +2,13 @@ package com.sayitmc.game;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
- * One player's round of the game, server thread only: every new item they get must be said in their language
- * before its timer runs out, or it is cleared. Dropping the item stops (resets) its timer.
+ * One player's round of the game, server thread only: every new item they get must be said in the server's
+ * language before its timer runs out, or it is cleared. Dropping the item stops (resets) its timer.
  */
 public final class PlayerGame {
 	/** What the game does to the player; backed by the real player on the server and by a fake in tests. */
@@ -28,7 +27,6 @@ public final class PlayerGame {
 	private final Deque<String> queue = new ArrayDeque<>();
 	/** Item ids held on the previous tick; null means the next tick only takes a baseline. */
 	private Set<String> previous;
-	private String language;
 	private boolean enabled;
 	private Running running;
 	private int nextId = 1;
@@ -47,27 +45,22 @@ public final class PlayerGame {
 		}
 	}
 
-	/** The client said which language it is learning and whether it wants to play. */
-	public void hello(String language, boolean enabled, Actions actions) {
-		if (!Objects.equals(this.language, language) || !enabled) {
+	/** The client has the mod; {@code enabled} is whether this player plays. */
+	public void hello(boolean enabled, Actions actions) {
+		if (!enabled) {
 			reset(actions);
 		}
 
-		this.language = language;
 		this.enabled = enabled;
 	}
 
-	public String language() {
-		return language;
-	}
-
 	public boolean isPlaying() {
-		return enabled && language != null;
+		return enabled;
 	}
 
 	/**
 	 * @param held item ids currently in the player's inventory (including the stack on the cursor)
-	 * @param learned whether an item is already learned in this player's language
+	 * @param learned whether this player already learned an item in the server's language
 	 */
 	public void tick(long now, Set<String> held, Predicate<String> learned, ServerConfig config, Actions actions) {
 		if (!isPlaying()) {

@@ -5,6 +5,7 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -15,7 +16,10 @@ import com.sayitmc.SayItMod;
 /** Rules of the game, stored in {@code config/sayitmc-server.json} on the server (or the singleplayer game). */
 public final class ServerConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+	private static final String DEFAULT_LANGUAGE = "de_de";
 
+	/** Minecraft language code every player learns, e.g. de_de, ja_jp, zh_cn, ko_kr, fr_fr. Players cannot change it. */
+	public String language = DEFAULT_LANGUAGE;
 	public int secondsToAnswer = 10;
 	/** Take the item away when its timer runs out. Turn off for practice without losing items. */
 	public boolean clearItemsOnTimeout = true;
@@ -40,19 +44,36 @@ public final class ServerConfig {
 			}
 		}
 
-		config.secondsToAnswer = Math.clamp(config.secondsToAnswer, 3, 120);
-		config.waitForClientSeconds = Math.clamp(config.waitForClientSeconds, 5, 600);
+		config.sanitize();
+		config.save(file);
+		return config;
+	}
 
+	public void save(Path file) {
 		try {
 			Files.createDirectories(file.getParent());
 
 			try (Writer writer = Files.newBufferedWriter(file)) {
-				GSON.toJson(config, writer);
+				GSON.toJson(this, writer);
 			}
 		} catch (IOException e) {
 			SayItMod.LOGGER.error("Could not save {}", file, e);
 		}
+	}
 
-		return config;
+	public ServerConfig copy() {
+		return GSON.fromJson(GSON.toJson(this), ServerConfig.class);
+	}
+
+	private void sanitize() {
+		language = language == null ? "" : language.trim().toLowerCase(Locale.ROOT);
+
+		if (!Languages.isValidCode(language)) {
+			SayItMod.LOGGER.warn("\"{}\" is not a Minecraft language code, using {}", language, DEFAULT_LANGUAGE);
+			language = DEFAULT_LANGUAGE;
+		}
+
+		secondsToAnswer = Math.clamp(secondsToAnswer, 3, 120);
+		waitForClientSeconds = Math.clamp(waitForClientSeconds, 5, 600);
 	}
 }

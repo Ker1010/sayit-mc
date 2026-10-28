@@ -1,10 +1,5 @@
 package com.sayitmc.client;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.Map;
-
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.Container;
@@ -14,49 +9,23 @@ import net.minecraft.world.item.ItemStack;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 
+import com.sayitmc.SayItMod;
 import com.sayitmc.client.speech.SpeechService;
 import com.sayitmc.game.Outcome;
 import com.sayitmc.network.SayItPayloads;
 
 /**
- * Shows one challenge card at a time. On a server with the mod the server decides which item to ask and when;
- * otherwise (practice mode) new items are queued here. Render thread only.
+ * Shows one challenge card at a time. The server decides which item to ask, in which language and for how long;
+ * {@code /sayit test} adds practice cards that are never cleared. Render thread only.
  */
 public final class ChallengeManager {
-	private static final int MAX_QUEUED = 8;
-
 	private final SpeechService speech;
-	private final Deque<ItemStack> practiceQueue = new ArrayDeque<>();
-	/** When each item was last asked in practice mode, so a missed word is not asked again right away. */
-	private final Map<String, Long> lastAsked = new HashMap<>();
 	private Challenge current;
 	/** A server challenge that arrived while the previous card was still showing its result. */
 	private SayItPayloads.Challenge pendingServerChallenge;
 
 	public ChallengeManager(SpeechService speech) {
 		this.speech = speech;
-	}
-
-	/** Practice mode: asks for this item unless it is already learned, queued, or was asked very recently. */
-	public void offerPractice(ItemStack stack, boolean force) {
-		ClientConfig config = ClientConfig.get();
-		String id = itemId(stack);
-		Long asked = lastAsked.get(id);
-		long now = System.currentTimeMillis();
-
-		if (!force && (LocalLearned.contains(config.language, id)
-				|| asked != null && now - asked < config.retryCooldownSeconds * 1000L)) {
-			return;
-		}
-
-		boolean pending = current != null && current.itemId.equals(id) || practiceQueue.stream().anyMatch(s -> itemId(s).equals(id));
-
-		if (!pending && practiceQueue.size() < MAX_QUEUED) {
-			ItemStack copy = stack.copy();
-			copy.setCount(1);
-			practiceQueue.add(copy);
-			lastAsked.put(id, now);
-		}
 	}
 
 	public void serverChallenge(SayItPayloads.Challenge payload) {
@@ -76,6 +45,18 @@ public final class ChallengeManager {
 		}
 	}
 
+	/** Practice card for {@code /sayit test}: same language and time as the server's game, but nothing is at stake. */
+	public boolean practice(ItemStack stack, String language, int seconds) {
+		if (current != null || pendingServerChallenge != null) {
+			return false;
+		}
+
+		ItemStack copy = stack.copy();
+		copy.setCount(1);
+		start(Challenge.PRACTICE, copy, itemId(copy), language, seconds);
+		return current != null;
+	}
+
 	public void tick(Player player) {
 		ClientConfig config = ClientConfig.get();
 		long now = System.currentTimeMillis();
@@ -84,10 +65,6 @@ public final class ChallengeManager {
 			current.tick(speech, config, now);
 
 			if (current.isOver(now)) {
-				if (current.wasCorrect() && !current.isServerGame()) {
-					LocalLearned.add(current.languageCode, current.itemId);
-				}
-
 				current = null;
 			}
 		}
@@ -95,28 +72,25 @@ public final class ChallengeManager {
 		if (current == null && pendingServerChallenge != null) {
 			SayItPayloads.Challenge payload = pendingServerChallenge;
 			pendingServerChallenge = null;
-			start(payload.id(), stackFor(player, payload.itemId()), payload.itemId(), payload.seconds(), config);
-		}
+			String language = SayItClient.serverLanguage();
 
-		while (current == null && !practiceQueue.isEmpty()) {
-			ItemStack next = practiceQueue.poll();
-			start(Challenge.PRACTICE, next, itemId(next), config.secondsToAnswer, config);
+			if (language == null) {
+				answerUnjudgeable(payload.id());
+			} else {
+				start(payload.id(), stackFor(player, payload.itemId()), payload.itemId(), language, payload.seconds());
+			}
 		}
 	}
 
-	private void start(int serverId, ItemStack stack, String itemId, int seconds, ClientConfig config) {
-		if (stack == null) {
-			answerUnjudgeable(serverId);
-			return;
-		}
-
-		current = Challenge.create(serverId, stack, itemId, config.language, seconds);
+	private void start(int serverId, ItemStack stack, String itemId, String language, int seconds) {
+		current = stack == null ? null : Challenge.create(serverId, stack, itemId, language, seconds);
 
 		if (current == null) {
-			// No translation for this item (e.g. a modded item), so it cannot be asked.
+			// No translation for this item in that language (e.g. a modded item), so it cannot be asked.
+			SayItMod.LOGGER.info("No {} name for {}, skipping it", language, itemId);
 			answerUnjudgeable(serverId);
 		} else {
-			speech.prepare(config.language);
+			speech.prepare(language);
 		}
 	}
 
@@ -130,7 +104,7 @@ public final class ChallengeManager {
 		return current;
 	}
 
-	/** Ends a practice challenge. Server challenges cannot be skipped (dropping the item resets them). */
+	/** Ends a practice card. Server challenges cannot be skipped (dropping the item resets them). */
 	public boolean skipPractice() {
 		if (current == null || current.isServerGame()) {
 			return false;
@@ -148,8 +122,6 @@ public final class ChallengeManager {
 		}
 
 		pendingServerChallenge = null;
-		practiceQueue.clear();
-		lastAsked.clear();
 	}
 
 	/** The matching stack from the player's inventory (keeps enchantment glint etc.), or a plain one. */

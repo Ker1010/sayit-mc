@@ -10,7 +10,7 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import com.sayitmc.SayItMod;
 
 /**
- * Packets between the server, which runs the game (timers, clearing items), and each player's client,
+ * Packets between the server, which runs the game (language, timers, clearing items), and each player's client,
  * which listens to that player's microphone and judges what they said.
  */
 public final class SayItPayloads {
@@ -22,25 +22,28 @@ public final class SayItPayloads {
 		PayloadTypeRegistry.serverboundPlay().register(Listening.TYPE, Listening.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(Answer.TYPE, Answer.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(Forget.TYPE, Forget.CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(Rules.TYPE, Rules.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(Challenge.TYPE, Challenge.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(Result.TYPE, Result.CODEC);
 	}
 
+	/** Bumped when packets change, so mismatched mod versions ignore each other instead of failing to decode. */
+	private static final String PROTOCOL = "v3/";
+
 	private static <T extends CustomPacketPayload> CustomPacketPayload.Type<T> payloadType(String path) {
-		return new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(SayItMod.MOD_ID, path));
+		return new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(SayItMod.MOD_ID, PROTOCOL + path));
 	}
 
-	/** Client -> server: the language this player is learning, and whether they are playing. */
-	public record Hello(String language, boolean enabled) implements CustomPacketPayload {
+	/** Client -> server: this player has the mod, and whether they are playing. */
+	public record Hello(boolean enabled) implements CustomPacketPayload {
 		public static final Type<Hello> TYPE = payloadType("hello");
 		public static final StreamCodec<FriendlyByteBuf, Hello> CODEC = CustomPacketPayload.codec(Hello::write, Hello::new);
 
 		private Hello(FriendlyByteBuf buf) {
-			this(buf.readUtf(), buf.readBoolean());
+			this(buf.readBoolean());
 		}
 
 		private void write(FriendlyByteBuf buf) {
-			buf.writeUtf(language);
 			buf.writeBoolean(enabled);
 		}
 
@@ -100,7 +103,27 @@ public final class SayItPayloads {
 		}
 	}
 
-	/** Server -> client: say this item's name within {@code seconds}. */
+	/** Server -> client: the language everyone learns and the time per word, chosen by the server. */
+	public record Rules(String language, int seconds) implements CustomPacketPayload {
+		public static final Type<Rules> TYPE = payloadType("rules");
+		public static final StreamCodec<FriendlyByteBuf, Rules> CODEC = CustomPacketPayload.codec(Rules::write, Rules::new);
+
+		private Rules(FriendlyByteBuf buf) {
+			this(buf.readUtf(), buf.readVarInt());
+		}
+
+		private void write(FriendlyByteBuf buf) {
+			buf.writeUtf(language);
+			buf.writeVarInt(seconds);
+		}
+
+		@Override
+		public Type<Rules> type() {
+			return TYPE;
+		}
+	}
+
+	/** Server -> client: say this item's name, in the {@link Rules#language() server's language}, within {@code seconds}. */
 	public record Challenge(int id, String itemId, int seconds) implements CustomPacketPayload {
 		public static final Type<Challenge> TYPE = payloadType("challenge");
 		public static final StreamCodec<FriendlyByteBuf, Challenge> CODEC = CustomPacketPayload.codec(Challenge::write, Challenge::new);

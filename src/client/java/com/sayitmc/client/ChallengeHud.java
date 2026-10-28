@@ -8,6 +8,7 @@ import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 
 import com.sayitmc.client.speech.SpeechService;
+import com.sayitmc.game.Languages;
 
 /** The "SAY IT IN GERMAN / Weizen / listening..." card in the top-left corner. */
 public final class ChallengeHud {
@@ -50,7 +51,7 @@ public final class ChallengeHud {
 
 		Font font = Minecraft.getInstance().font;
 		Challenge.Phase phase = challenge.phase();
-		String header = I18n.get("sayitmc.hud.header", TargetLanguage.displayName(challenge.languageCode));
+		String header = I18n.get("sayitmc.hud.header", Languages.displayName(challenge.languageCode));
 		String timer = phase == Challenge.Phase.LISTENING ? challenge.secondsLeft(now) + "s" : "";
 		String subtitle = challenge.subtitle == null ? null : "(" + challenge.subtitle + ")";
 		int accent = accentColor(phase);
