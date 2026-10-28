@@ -1,4 +1,4 @@
-package com.sayitmc.speech;
+package com.sayitmc.client.speech;
 
 import java.io.IOException;
 import java.util.List;
@@ -15,7 +15,7 @@ import com.google.gson.JsonParser;
 import org.vosk.Model;
 import org.vosk.Recognizer;
 
-import com.sayitmc.SayItClient;
+import com.sayitmc.SayItMod;
 
 /** Streams the microphone into a Vosk recognizer on its own thread until {@link #close()} is called. */
 public final class ListenSession implements AutoCloseable {
@@ -92,7 +92,7 @@ public final class ListenSession implements AutoCloseable {
 
 			addFinal(recognizer.getFinalResult());
 		} catch (Throwable t) {
-			SayItClient.LOGGER.warn("Speech recognition stopped", t);
+			SayItMod.LOGGER.warn("Speech recognition stopped", t);
 		} finally {
 			line.stop();
 			line.close();

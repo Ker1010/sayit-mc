@@ -6,5 +6,7 @@
 	"sayitmc.hud.timeout": "✘ Time's up!",
 	"sayitmc.hud.downloading": "downloading speech model %s%%",
 	"sayitmc.hud.loading": "loading speech model...",
-	"sayitmc.hud.flashcard": "no speech check: %s"
+	"sayitmc.hud.flashcard": "no speech check: %s",
+	"sayitmc.hud.cleared": "✘ Time's up! Item cleared",
+	"sayitmc.hud.dropped": "dropped - timer reset"
 }

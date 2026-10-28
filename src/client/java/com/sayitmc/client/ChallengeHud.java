@@ -1,12 +1,13 @@
-package com.sayitmc;
+package com.sayitmc.client;
 
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.resources.language.I18n;
+import net.minecraft.network.chat.Component;
 
-import com.sayitmc.speech.SpeechService;
+import com.sayitmc.client.speech.SpeechService;
 
 /** The "SAY IT IN GERMAN / Weizen / listening..." card in the top-left corner. */
 public final class ChallengeHud {
@@ -14,6 +15,7 @@ public final class ChallengeHud {
 	private static final int ICON_SIZE = 32;
 	private static final int TEXT_LEFT = 52;
 	private static final int PADDING_RIGHT = 12;
+	private static final int LINE_HEIGHT = 9;
 	private static final long SLIDE_MILLIS = 180;
 
 	private static final int BACKGROUND = 0xE61E2433;
@@ -54,13 +56,13 @@ public final class ChallengeHud {
 		int accent = accentColor(phase);
 
 		int maxTextWidth = Math.max(80, graphics.guiWidth() - 2 * MARGIN - TEXT_LEFT - PADDING_RIGHT);
-		int wordWidth = font.width(challenge.word);
+		int wordWidth = width(font, challenge.word);
 		float wordScale = Math.clamp((float) maxTextWidth / Math.max(1, wordWidth), 1f, 2f);
-		int textWidth = Math.max(130, font.width(header) + font.width(timer) + 16);
+		int textWidth = Math.max(130, width(font, header) + width(font, timer) + 16);
 		textWidth = Math.max(textWidth, (int) Math.ceil(wordWidth * wordScale));
 
 		if (subtitle != null) {
-			textWidth = Math.max(textWidth, font.width(subtitle));
+			textWidth = Math.max(textWidth, width(font, subtitle));
 		}
 
 		textWidth = Math.min(textWidth, maxTextWidth);
@@ -69,10 +71,10 @@ public final class ChallengeHud {
 
 		int width = TEXT_LEFT + textWidth + PADDING_RIGHT;
 		int wordTop = 20;
-		int subtitleTop = wordTop + Math.round(font.lineHeight * wordScale) + 2;
-		int barTop = subtitle == null ? subtitleTop + 1 : subtitleTop + font.lineHeight + 3;
+		int subtitleTop = wordTop + Math.round(LINE_HEIGHT * wordScale) + 2;
+		int barTop = subtitle == null ? subtitleTop + 1 : subtitleTop + LINE_HEIGHT + 3;
 		int statusTop = barTop + 7;
-		int height = statusTop + font.lineHeight + 6;
+		int height = statusTop + LINE_HEIGHT + 6;
 
 		float slide = Math.min(1f, (now - shownSince) / (float) SLIDE_MILLIS);
 		int x = MARGIN - Math.round((width + MARGIN) * (1 - slide) * (1 - slide));
@@ -85,30 +87,30 @@ public final class ChallengeHud {
 		graphics.pose().pushMatrix();
 		graphics.pose().translate(x + 12, y + (height - ICON_SIZE) / 2f);
 		graphics.pose().scale(2f);
-		graphics.item(challenge.stack, 0, 0);
+		graphics.fakeItem(challenge.stack, 0, 0);
 		graphics.pose().popMatrix();
 
-		graphics.text(font, header, textX, y + 7, MUTED);
+		text(graphics, font, header, textX, y + 7, MUTED);
 
 		if (!timer.isEmpty()) {
-			graphics.text(font, timer, textX + textWidth - font.width(timer), y + 7, WHITE);
+			text(graphics, font, timer, textX + textWidth - width(font, timer), y + 7, WHITE);
 		}
 
 		graphics.pose().pushMatrix();
 		graphics.pose().translate(textX, y + wordTop);
 		graphics.pose().scale(wordScale);
-		graphics.text(font, challenge.word, 0, 0, phase == Challenge.Phase.CORRECT ? GREEN : GOLD);
+		text(graphics, font, challenge.word, 0, 0, phase == Challenge.Phase.CORRECT ? GREEN : GOLD);
 		graphics.pose().popMatrix();
 
 		if (subtitle != null) {
-			graphics.text(font, subtitle, textX, y + subtitleTop, LIGHT);
+			text(graphics, font, subtitle, textX, y + subtitleTop, LIGHT);
 		}
 
 		float progress = progress(challenge, now);
 		graphics.fill(textX, y + barTop, textX + textWidth, y + barTop + 3, TRACK);
 		graphics.fill(textX, y + barTop, textX + Math.round(textWidth * progress), y + barTop + 3, accent);
 
-		graphics.text(font, status, textX, y + statusTop, statusColor(phase));
+		text(graphics, font, status, textX, y + statusTop, statusColor(phase));
 	}
 
 	private static String statusLine(Challenge challenge) {
@@ -123,6 +125,8 @@ public final class ChallengeHud {
 					: I18n.get("sayitmc.hud.heard", challenge.heard());
 			case CORRECT -> I18n.get("sayitmc.hud.correct");
 			case TIMED_OUT -> I18n.get("sayitmc.hud.timeout");
+			case CLEARED -> I18n.get("sayitmc.hud.cleared");
+			case DROPPED -> I18n.get("sayitmc.hud.dropped");
 			case FLASHCARD -> I18n.get("sayitmc.hud.flashcard", challenge.note());
 		};
 	}
@@ -134,7 +138,7 @@ public final class ChallengeHud {
 					: 0f;
 			case LISTENING, FLASHCARD -> challenge.timeLeftFraction(now);
 			case CORRECT -> 1f;
-			case CHECKING, TIMED_OUT -> 0f;
+			case CHECKING, TIMED_OUT, CLEARED, DROPPED -> 0f;
 		};
 	}
 
@@ -142,32 +146,40 @@ public final class ChallengeHud {
 		return switch (phase) {
 			case LISTENING, CHECKING -> GOLD;
 			case CORRECT -> GREEN;
-			case TIMED_OUT -> RED;
-			case PREPARING, FLASHCARD -> MUTED;
+			case TIMED_OUT, CLEARED -> RED;
+			case PREPARING, DROPPED, FLASHCARD -> MUTED;
 		};
 	}
 
 	private static int statusColor(Challenge.Phase phase) {
 		return switch (phase) {
 			case CORRECT -> GREEN;
-			case TIMED_OUT -> RED;
+			case TIMED_OUT, CLEARED -> RED;
 			default -> LIGHT;
 		};
 	}
 
+	private static void text(GuiGraphicsExtractor graphics, Font font, String text, int x, int y, int color) {
+		graphics.text(font, Component.literal(text), x, y, color);
+	}
+
+	private static int width(Font font, String text) {
+		return font.width(Component.literal(text));
+	}
+
 	/** Cuts {@code text} with an ellipsis so it is at most {@code maxWidth} pixels wide. */
 	private static String fit(Font font, String text, int maxWidth) {
-		if (font.width(text) <= maxWidth) {
+		if (width(font, text) <= maxWidth) {
 			return text;
 		}
 
-		String ellipsis = "...";
+		int ellipsis = width(font, "...");
 		int end = text.length();
 
-		while (end > 0 && font.width(text.substring(0, end)) + font.width(ellipsis) > maxWidth) {
+		while (end > 0 && width(font, text.substring(0, end)) + ellipsis > maxWidth) {
 			end--;
 		}
 
-		return text.substring(0, end) + ellipsis;
+		return text.substring(0, end) + "...";
 	}
 }

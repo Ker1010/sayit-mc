@@ -1,4 +1,4 @@
-package com.sayitmc;
+package com.sayitmc.text;
 
 import java.util.Locale;
 import java.util.Map;

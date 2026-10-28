@@ -1,4 +1,4 @@
-package com.sayitmc.speech;
+package com.sayitmc.client.speech;
 
 import java.nio.file.Path;
 import java.util.Objects;
@@ -11,8 +11,8 @@ import org.vosk.LibVosk;
 import org.vosk.LogLevel;
 import org.vosk.Model;
 
-import com.sayitmc.Romanizer;
-import com.sayitmc.SayItClient;
+import com.sayitmc.SayItMod;
+import com.sayitmc.text.Romanizer;
 
 /** Keeps the speech model for the target language loaded, fetching it in the background the first time. */
 public final class SpeechService {
@@ -138,12 +138,12 @@ public final class SpeechService {
 				state = State.READY;
 			}
 
-			SayItClient.LOGGER.info("Loaded speech model {} for {}", dir.getFileName(), code);
+			SayItMod.LOGGER.info("Loaded speech model {} for {}", dir.getFileName(), code);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 		} catch (Throwable t) {
 			// UnsatisfiedLinkError lands here too, e.g. on CPUs Vosk has no native library for.
-			SayItClient.LOGGER.error("Could not load speech model for {} from {}", code, url, t);
+			SayItMod.LOGGER.error("Could not load speech model for {} from {}", code, url, t);
 			fail(code, Objects.requireNonNullElse(t.getMessage(), t.getClass().getSimpleName()));
 		}
 	}

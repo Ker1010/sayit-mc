@@ -1,4 +1,4 @@
-package com.sayitmc;
+package com.sayitmc.text;
 
 /**
  * Fuzzy comparison between the expected word and what the speech recognizer heard.

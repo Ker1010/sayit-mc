@@ -1,0 +1,272 @@
+package com.sayitmc.client;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+
+import com.sayitmc.SayItMod;
+import com.sayitmc.client.speech.ListenSession;
+import com.sayitmc.client.speech.SpeechService;
+import com.sayitmc.game.Outcome;
+import com.sayitmc.network.SayItPayloads;
+import com.sayitmc.text.AnswerMatcher;
+import com.sayitmc.text.Romanizer;
+
+/**
+ * One "say this item's name" card, from waiting for the speech model to showing the result.
+ * Server challenges report to the server, which owns the timer and clears the item;
+ * practice challenges (servers without the mod) only run locally.
+ */
+public final class Challenge {
+	public enum Phase {
+		/** Speech model still downloading or loading; the clock has not started. */
+		PREPARING,
+		LISTENING,
+		/** Time is up, waiting for the last words (and, in the server game, the server's verdict). */
+		CHECKING,
+		CORRECT,
+		/** Practice mode: time ran out. */
+		TIMED_OUT,
+		/** Server game: time ran out and the item was taken away. */
+		CLEARED,
+		/** Server game: the item left the inventory, so its timer was reset. */
+		DROPPED,
+		/** Speech is unavailable, so the word is only shown. */
+		FLASHCARD
+	}
+
+	public static final int PRACTICE = -1;
+
+	private static final long RESULT_MILLIS = 2500;
+	private static final long DROPPED_MILLIS = 1500;
+	private static final long CHECK_GRACE_MILLIS = 1500;
+	/** In the server game, give up waiting for the server's verdict after this long. */
+	private static final long SERVER_VERDICT_MILLIS = 5000;
+
+	/** Server challenge id, or {@link #PRACTICE}. */
+	public final int serverId;
+	public final ItemStack stack;
+	public final String itemId;
+	public final String languageCode;
+	public final String word;
+	/** English-style pronunciation, or null when the word is already in Latin letters. */
+	public final String subtitle;
+	private final String expectedKey;
+	private final long answerMillis;
+
+	private Phase phase = Phase.PREPARING;
+	private long phaseStart = System.currentTimeMillis();
+	private boolean over;
+	private ListenSession session;
+	private String heard = "";
+	private String note = "";
+
+	private Challenge(int serverId, ItemStack stack, String itemId, String languageCode, String word, long answerMillis) {
+		this.serverId = serverId;
+		this.stack = stack;
+		this.itemId = itemId;
+		this.languageCode = languageCode;
+		this.word = word;
+		this.subtitle = Romanizer.subtitle(word, languageCode);
+		this.expectedKey = Romanizer.matchKey(word, languageCode);
+		this.answerMillis = answerMillis;
+	}
+
+	/** Null when the target language has no name for this item. */
+	static Challenge create(int serverId, ItemStack stack, String itemId, String languageCode, int seconds) {
+		String word = TargetLanguage.translate(languageCode, stack.getItem().getDescriptionId());
+
+		if (word == null || word.isBlank()) {
+			return null;
+		}
+
+		return new Challenge(serverId, stack, itemId, languageCode, word.trim(), seconds * 1000L);
+	}
+
+	public boolean isServerGame() {
+		return serverId != PRACTICE;
+	}
+
+	void tick(SpeechService speech, ClientConfig config, long now) {
+		switch (phase) {
+			case PREPARING -> {
+				if (expectedKey.isEmpty()) {
+					showFlashcard("nothing to compare", now);
+				} else if (speech.canListen()) {
+					startListening(speech, now);
+				} else if (speech.state() == SpeechService.State.UNAVAILABLE) {
+					showFlashcard(speech.problem(), now);
+				}
+			}
+			case LISTENING -> {
+				checkAnswer(config, now);
+
+				if (phase == Phase.LISTENING && now - phaseStart >= answerMillis) {
+					session.close();
+					enter(Phase.CHECKING, now);
+				}
+			}
+			case CHECKING -> {
+				checkAnswer(config, now);
+
+				long waited = now - phaseStart;
+				boolean done = isServerGame()
+						? waited >= SERVER_VERDICT_MILLIS
+						: session.isFinished() || waited >= CHECK_GRACE_MILLIS;
+
+				if (phase == Phase.CHECKING && done) {
+					enter(Phase.TIMED_OUT, now);
+					playSound("entity.villager.no", 1.0f);
+				}
+			}
+			default -> {
+			}
+		}
+	}
+
+	/** The server's verdict for a server challenge. */
+	void serverResult(Outcome outcome, long now) {
+		closeSession();
+
+		switch (outcome) {
+			case CORRECT -> {
+				if (phase != Phase.CORRECT) {
+					enter(Phase.CORRECT, now);
+					playSound("entity.player.levelup", 1.4f);
+				}
+			}
+			case CLEARED -> {
+				enter(Phase.CLEARED, now);
+				playSound("entity.item.break", 0.8f);
+			}
+			case TIMED_OUT -> {
+				if (phase != Phase.TIMED_OUT) {
+					enter(Phase.TIMED_OUT, now);
+					playSound("entity.villager.no", 1.0f);
+				}
+			}
+			case DROPPED -> enter(Phase.DROPPED, now);
+			case CANCELLED -> {
+				// A flashcard is shown because this client cancelled; anything else just closes.
+				if (phase != Phase.FLASHCARD) {
+					over = true;
+				}
+			}
+		}
+	}
+
+	boolean isOver(long now) {
+		return over || switch (phase) {
+			case CORRECT, TIMED_OUT, CLEARED -> now - phaseStart >= RESULT_MILLIS;
+			case DROPPED -> now - phaseStart >= DROPPED_MILLIS;
+			case FLASHCARD -> now - phaseStart >= answerMillis;
+			default -> false;
+		};
+	}
+
+	boolean wasCorrect() {
+		return phase == Phase.CORRECT;
+	}
+
+	void cancel() {
+		closeSession();
+		over = true;
+	}
+
+	public Phase phase() {
+		return phase;
+	}
+
+	public String heard() {
+		return heard;
+	}
+
+	/** Why the challenge fell back to a flashcard. */
+	public String note() {
+		return note;
+	}
+
+	/** 1 -> 0 while the clock runs. */
+	public float timeLeftFraction(long now) {
+		long total = phase == Phase.FLASHCARD || phase == Phase.LISTENING ? answerMillis : 0;
+		return total == 0 ? 0 : Math.clamp(1f - (float) (now - phaseStart) / total, 0f, 1f);
+	}
+
+	public int secondsLeft(long now) {
+		return phase == Phase.LISTENING ? (int) Math.ceil(Math.max(0, answerMillis - (now - phaseStart)) / 1000.0) : 0;
+	}
+
+	private void startListening(SpeechService speech, long now) {
+		try {
+			session = speech.listen();
+			enter(Phase.LISTENING, now);
+
+			if (isServerGame()) {
+				ClientPlayNetworking.send(new SayItPayloads.Listening(serverId));
+			}
+		} catch (Exception e) {
+			SayItMod.LOGGER.warn("Could not open the microphone", e);
+			showFlashcard(e.getMessage() == null ? "no microphone" : e.getMessage(), now);
+		}
+	}
+
+	private void checkAnswer(ClientConfig config, long now) {
+		String latest = session.heard();
+
+		if (latest.equals(heard)) {
+			return;
+		}
+
+		heard = latest;
+
+		if (AnswerMatcher.matches(expectedKey, Romanizer.matchKey(latest, languageCode), config.matchThreshold)) {
+			session.close();
+			enter(Phase.CORRECT, now);
+			playSound("entity.player.levelup", 1.4f);
+
+			if (isServerGame()) {
+				ClientPlayNetworking.send(new SayItPayloads.Answer(serverId, true));
+			}
+		}
+	}
+
+	private void showFlashcard(String reason, long now) {
+		note = reason;
+		enter(Phase.FLASHCARD, now);
+
+		// Without speech the player cannot win, so the server game must not take the item.
+		if (isServerGame()) {
+			ClientPlayNetworking.send(new SayItPayloads.Answer(serverId, false));
+		}
+	}
+
+	private void closeSession() {
+		if (session != null) {
+			session.close();
+		}
+	}
+
+	private void enter(Phase next, long now) {
+		phase = next;
+		phaseStart = now;
+	}
+
+	private static void playSound(String id, float pitch) {
+		Minecraft minecraft = Minecraft.getInstance();
+		Level level = minecraft.level;
+		Entity player = minecraft.player;
+		SoundEvent sound = BuiltInRegistries.SOUND_EVENT.getValue(Identifier.withDefaultNamespace(id));
+
+		// On the client, Level.playSound only plays sounds caused by the local player, which this is.
+		if (level != null && player != null && sound != null) {
+			level.playSound(player, player.getX(), player.getY(), player.getZ(), sound, SoundSource.PLAYERS, 0.7f, pitch);
+		}
+	}
+}

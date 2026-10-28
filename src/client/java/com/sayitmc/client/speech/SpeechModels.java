@@ -1,4 +1,4 @@
-package com.sayitmc.speech;
+package com.sayitmc.client.speech;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -20,8 +20,8 @@ import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import com.sayitmc.Romanizer;
-import com.sayitmc.SayItConfig;
+import com.sayitmc.client.ClientConfig;
+import com.sayitmc.text.Romanizer;
 
 /** Knows which Vosk model serves each language, and downloads + unpacks it on first use. */
 public final class SpeechModels {
@@ -57,7 +57,7 @@ public final class SpeechModels {
 	/** Download URL for the language, preferring the user's override in the config. */
 	public static Optional<String> urlFor(String languageCode) {
 		String lang = Romanizer.languagePrefix(languageCode);
-		Map<String, String> overrides = SayItConfig.get().speechModelUrls;
+		Map<String, String> overrides = ClientConfig.get().speechModelUrls;
 		String override = overrides.getOrDefault(languageCode, overrides.get(lang));
 
 		if (override != null && !override.isBlank()) {

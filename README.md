@@ -1,7 +1,7 @@
 # Say It! — learn a language while you play Minecraft
 
-A client-side Fabric mod for **Minecraft Java 26.3**. Whenever you get an item you have not learned yet,
-a card pops up asking you to **say its name out loud in the language you are learning**:
+A Fabric mod for **Minecraft Java 26.3**. Every time you get an item you have not learned yet, a card asks you to
+**say its name out loud in the language you are learning**, and a timer starts:
 
 ```
 ┌──────────────────────────────────────┐
@@ -12,43 +12,81 @@ a card pops up asking you to **say its name out loud in the language you are lea
 └──────────────────────────────────────┘
 ```
 
-- Item names come from **Minecraft's own translation files**, so every language the game supports works,
-  and your game UI can stay in English.
-- If the word is not written in Latin letters, a **pronunciation subtitle** shows how it sounds in
-  English-style letters:
-  - Japanese `ダイヤモンドの剣` → `(daiyamondo no ken)`, `小麦` → `(komugi)`
-  - Chinese `小麦` → `(xiǎo mài)` · Korean `다이아몬드 검` → `(daiamondeu geom)`
-  - Russian `Алмазный меч` → `(Almaznyy mech)` · Ukrainian, Greek, Arabic, Hebrew, Thai, Hindi, Georgian, ...
-- Speech is recognized **offline** with [Vosk](https://alphacephei.com/vosk/). The ~50 MB model for your
-  language downloads automatically the first time. The microphone is only open while a card says *listening...*.
-- Say it right → level-up sound and the item is marked learned. Miss it → you get asked again the next time you
-  pick it up (after a 2-minute cooldown).
+## The game
 
-## Requirements
+- **Say it before the timer hits 0** → level-up sound, the item is learned and never asked again.
+- **Timer hits 0** → the item is **cleared** from your inventory. Pick it up again to get another try.
+- **Drop the item** (or put it in a chest) → its **timer resets**. When you pick it up again you get a fresh timer.
+- One word at a time; other new items wait their turn.
+- **Every player plays for themselves**: their own microphone, their own language, their own learned items.
 
-- Minecraft Java **26.3**, Fabric Loader **0.20.1+**, [Fabric API](https://modrinth.com/mod/fabric-api) **0.165.0+26.3**
-- Java 25 (bundled with the official launcher for 26.3)
-- A microphone
+Item names come from Minecraft's own translations, so every language the game has works and your game UI can stay
+in English. Words not written in Latin letters get a **pronunciation subtitle**:
+
+- Japanese `ダイヤモンドの剣` → `(daiyamondo no ken)`, `小麦` → `(komugi)`
+- Chinese `小麦` → `(xiǎo mài)` · Korean `다이아몬드 검` → `(daiamondeu geom)`
+- Russian `Алмазный меч` → `(Almaznyy mech)` · also Ukrainian, Greek, Arabic, Hebrew, Thai, Hindi, Georgian, ...
+
+Speech is recognized **offline** on each player's own computer with [Vosk](https://alphacephei.com/vosk/). The ~50 MB
+model for your language downloads automatically the first time (the timer waits for it). The microphone is only
+open while the card says *listening...*.
+
+## Install
+
+Requirements: Minecraft Java **26.3**, Fabric Loader **0.19.3+**, [Fabric API](https://modrinth.com/mod/fabric-api)
+**0.165.0+26.3**, Java 25, a microphone.
+
+| Where | What happens |
+| --- | --- |
+| **Singleplayer** | Put `sayit-mc-0.2.0.jar` and Fabric API in `.minecraft/mods`. The full game runs. |
+| **Server** | Put the jar and Fabric API in the server's `mods` folder **and** in every player's `mods` folder. Each player with the mod plays the game; players without it can still join and are left alone. |
+| **Server without the mod** | Players who have the mod get **practice mode**: same cards and speech check, but nothing is cleared. |
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `/sayit` | Status: language, number of items learned |
+| `/sayit` | Status: language, game or practice mode |
 | `/sayit language <code>` | Language to learn, e.g. `ja_jp`, `zh_cn`, `ko_kr`, `de_de`, `fr_fr`, `es_es` (tab-completes) |
-| `/sayit time <seconds>` | Time to answer (3–120, default 10) |
-| `/sayit test` | Practice the item in your hand right now |
-| `/sayit skip` | Skip the current card |
-| `/sayit on` / `off` | Turn quizzes on or off |
-| `/sayit forget` | Reset learned items for the current language |
+| `/sayit on` / `off` | Join or leave the game |
+| `/sayit test` | Practice the item in your hand (never cleared) |
+| `/sayit skip` | Skip a practice card (server words can't be skipped — drop the item instead) |
+| `/sayit time <seconds>` | Answer time in practice mode |
+| `/sayit forget` | Reset your learned items for the current language |
+
+## Config
+
+Server rules — `config/sayitmc-server.json` on the server (or your own game for singleplayer):
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `secondsToAnswer` | `10` | Length of each timer |
+| `clearItemsOnTimeout` | `true` | Take the item when time runs out; `false` for a friendly mode |
+| `includeCreativePlayers` | `false` | Also play in creative mode |
+| `quizItemsAlreadyInInventory` | `false` | Also ask for what players carry when they join |
+| `waitForClientSeconds` | `60` | How long to wait for a player's speech model download |
+
+Learned items are saved per player in the world folder: `data/sayitmc/learned.json`.
+
+Your settings — `config/sayitmc.json`:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `language` | `de_de` | Minecraft language code to learn |
+| `enabled` | `true` | Play the game |
+| `matchThreshold` | `0.75` | How close the spoken word must be (0–1). Lower it if you keep getting rejected |
+| `speechModelUrls` | `{}` | Extra / replacement Vosk models per language |
+| `secondsToAnswer`, `retryCooldownSeconds`, `quizItemsAlreadyInInventory` | | Practice mode only |
+
+Speech models are stored in `.minecraft/sayitmc/models/`.
 
 ## Speech recognition languages
 
 Built-in model downloads: English, German, French, Spanish, Italian, Portuguese, Dutch, Russian, Ukrainian, Polish,
 Turkish, Japanese, Chinese (Mandarin), Korean, Vietnamese, Hindi, Catalan, Czech, Swedish, Esperanto, Persian.
 
-Other languages still work as flashcards (word + pronunciation, no speech check). You can add any
-[Vosk model](https://alphacephei.com/vosk/models) in `config/sayitmc.json`:
+Other languages show the word and pronunciation as a flashcard without a speech check, and in the game their items
+are never cleared. You can add any [Vosk model](https://alphacephei.com/vosk/models) in `config/sayitmc.json`:
 
 ```json
 "speechModelUrls": {
@@ -56,26 +94,12 @@ Other languages still work as flashcards (word + pronunciation, no speech check)
 }
 ```
 
-## Config — `config/sayitmc.json`
-
-| Key | Default | Meaning |
-| --- | --- | --- |
-| `language` | `de_de` | Minecraft language code to learn |
-| `enabled` | `true` | Quiz on new items |
-| `secondsToAnswer` | `10` | Countdown length |
-| `matchThreshold` | `0.75` | How close the spoken word must be (0–1). Lower it if you keep getting rejected |
-| `retryCooldownSeconds` | `120` | Wait before asking a missed item again |
-| `quizItemsAlreadyInInventory` | `false` | Also quiz what you are carrying when joining a world |
-| `speechModelUrls` | `{}` | Extra / replacement Vosk models per language |
-
-Learned items are saved in `config/sayitmc/learned.json`, speech models in `.minecraft/sayitmc/models/`.
-
 ## Notes
 
+- If a player has no microphone or speech model, their cards become flashcards and their items are not cleared.
 - **macOS:** the app that launches Minecraft needs microphone permission (System Settings → Privacy & Security →
   Microphone). The official launcher may not ask for it; launchers like Prism Launcher do.
 - Speech recognition natives are included for Windows x64, macOS and Linux x64.
-- This mod is client-only; it works on any server.
 
 ## Building
 
@@ -83,6 +107,5 @@ Learned items are saved in `config/sayitmc/learned.json`, speech models in `.min
 ./gradlew build
 ```
 
-The mod jar is written to `build/libs/sayit-mc-<version>.jar`. Copy it into `.minecraft/mods` along with Fabric API.
-
-Unit tests for the romanizer and answer matching: `./gradlew test`.
+The jar is written to `build/libs/`. GitHub Actions builds it on every push (see the *Actions* tab → *Build* →
+artifact `sayit-mc`). Unit tests for the game rules, romanizer and answer matching: `./gradlew test`.

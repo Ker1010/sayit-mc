@@ -1,4 +1,4 @@
-package com.sayitmc;
+package com.sayitmc.client;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -18,14 +18,19 @@ import com.google.gson.reflect.TypeToken;
 
 import net.fabricmc.loader.api.FabricLoader;
 
-/** Items the player has said correctly, per language. Stored in {@code config/sayitmc/learned.json}. */
-public final class LearnedItems {
+import com.sayitmc.SayItMod;
+
+/**
+ * Items said correctly in practice mode, per language, stored in {@code config/sayitmc/learned.json}.
+ * On a server with the mod, the server keeps track instead.
+ */
+public final class LocalLearned {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final Type TYPE = new TypeToken<TreeMap<String, TreeSet<String>>>() { }.getType();
 	private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("sayitmc").resolve("learned.json");
 	private static Map<String, TreeSet<String>> learned = new TreeMap<>();
 
-	private LearnedItems() {
+	private LocalLearned() {
 	}
 
 	public static boolean contains(String language, String itemId) {
@@ -62,7 +67,7 @@ public final class LearnedItems {
 				learned = loaded;
 			}
 		} catch (IOException | JsonParseException e) {
-			SayItClient.LOGGER.error("Could not read {}", FILE, e);
+			SayItMod.LOGGER.error("Could not read {}", FILE, e);
 		}
 	}
 
@@ -74,7 +79,7 @@ public final class LearnedItems {
 				GSON.toJson(learned, TYPE, writer);
 			}
 		} catch (IOException e) {
-			SayItClient.LOGGER.error("Could not save {}", FILE, e);
+			SayItMod.LOGGER.error("Could not save {}", FILE, e);
 		}
 	}
 }

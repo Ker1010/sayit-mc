@@ -1,4 +1,4 @@
-package com.sayitmc;
+package com.sayitmc.client;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -14,39 +14,42 @@ import com.google.gson.JsonParseException;
 
 import net.fabricmc.loader.api.FabricLoader;
 
-/** Stored in {@code config/sayitmc.json}. */
-public final class SayItConfig {
+import com.sayitmc.SayItMod;
+
+/** This player's settings, stored in {@code config/sayitmc.json}. */
+public final class ClientConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 	private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("sayitmc.json");
-	private static SayItConfig instance = new SayItConfig();
+	private static ClientConfig instance = new ClientConfig();
 
 	/** Minecraft language code of the language being learned, e.g. de_de, ja_jp, zh_cn, ko_kr, fr_fr. */
 	public String language = "de_de";
 	public boolean enabled = true;
-	public int secondsToAnswer = 10;
 	/** How close the spoken word must be to count, from 0 (anything) to 1 (exact). */
 	public double matchThreshold = 0.75;
-	/** A missed word is asked again the next time the item is picked up, but not sooner than this. */
-	public int retryCooldownSeconds = 120;
-	/** Also quiz the items already in the inventory when joining a world. */
-	public boolean quizItemsAlreadyInInventory = false;
 	/** Optional Vosk model download URLs by language ("ja" or "ja_jp"), for languages without a built-in one. */
 	public Map<String, String> speechModelUrls = new LinkedHashMap<>();
 
-	public static SayItConfig get() {
+	// Practice mode only (servers without the mod); a server with the mod sets its own rules.
+	public int secondsToAnswer = 10;
+	/** A missed word is asked again the next time the item is picked up, but not sooner than this. */
+	public int retryCooldownSeconds = 120;
+	public boolean quizItemsAlreadyInInventory = false;
+
+	public static ClientConfig get() {
 		return instance;
 	}
 
 	public static void load() {
 		if (Files.exists(FILE)) {
 			try (Reader reader = Files.newBufferedReader(FILE)) {
-				SayItConfig loaded = GSON.fromJson(reader, SayItConfig.class);
+				ClientConfig loaded = GSON.fromJson(reader, ClientConfig.class);
 
 				if (loaded != null) {
 					instance = loaded;
 				}
 			} catch (IOException | JsonParseException e) {
-				SayItClient.LOGGER.error("Could not read {}, using defaults", FILE, e);
+				SayItMod.LOGGER.error("Could not read {}, using defaults", FILE, e);
 			}
 		}
 
@@ -62,7 +65,7 @@ public final class SayItConfig {
 				GSON.toJson(instance, writer);
 			}
 		} catch (IOException e) {
-			SayItClient.LOGGER.error("Could not save {}", FILE, e);
+			SayItMod.LOGGER.error("Could not save {}", FILE, e);
 		}
 	}
 
