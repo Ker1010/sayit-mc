@@ -39,7 +39,7 @@ Requirements: Minecraft Java **26.3**, Fabric Loader **0.19.3+**, [Fabric API](h
 
 | Where | What happens |
 | --- | --- |
-| **Server** | Put the jar and Fabric API in the server's `mods` folder **and** in every player's `mods` folder. Each player with the mod plays the game; players without it can still join and are left alone. |
+| **Server** | Put the jar and Fabric API in the server's `mods` folder **and** in every player's `mods` folder. By default (`requireMod`) players without the mod are kicked with a message telling them to install it; turn it off to let them join and sit the game out. |
 | **Singleplayer** | Put the jar and Fabric API in `.minecraft/mods`. Your game acts as the server, so the language comes from your `config/sayitmc-server.json`. |
 | **Server without the mod** | Nothing happens; the language has to come from a server running the mod. |
 
@@ -58,7 +58,7 @@ Players:
 | Command | What it does |
 | --- | --- |
 | `/sayit` | Show the server's language and time |
-| `/sayit on` / `off` | Join or leave the game |
+| `/sayit on` / `off` | Join or leave the game (not allowed when the server sets `requireMod`) |
 | `/sayit test` | Practice the item in your hand in the server's language (never cleared) |
 | `/sayit skip` | Skip a practice card (server words can't be skipped — drop the item instead) |
 | `/sayit forget` | Reset your learned items for the server's language |
@@ -76,6 +76,8 @@ Server rules — `config/sayitmc-server.json` on the server (or your own game fo
 | `includeCreativePlayers` | `false` | Also play in creative mode |
 | `quizItemsAlreadyInInventory` | `false` | Also ask for what players carry when they join |
 | `waitForClientSeconds` | `60` | How long to wait for a player's speech model download |
+| `requireMod` | `true` | Kick players who join without the mod, and nobody can use `/sayit off` |
+| `requireModMessage` | | The message those players see when kicked |
 
 Learned items are saved per player in the world folder: `data/sayitmc/learned.json`.
 

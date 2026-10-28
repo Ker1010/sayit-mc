@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -32,6 +33,10 @@ import com.sayitmc.network.SayItPayloads;
 public final class SayItServer {
 	private final Path configFile = FabricLoader.getInstance().getConfigDir().resolve("sayitmc-server.json");
 	private final Map<UUID, PlayerGame> games = new HashMap<>();
+	/** When each online player joined, to find the ones whose client never says hello. */
+	private final Map<UUID, Long> joinedAt = new HashMap<>();
+	private static final int HELLO_TIMEOUT_TICKS = 10 * 20;
+
 	private ServerConfig config = new ServerConfig();
 	private LearnedStore learned;
 	private MinecraftServer server;
@@ -45,13 +50,19 @@ public final class SayItServer {
 		});
 		// Lets server owners edit config/sayitmc-server.json and apply it with /reload.
 		ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((reloaded, resourceManager, success) -> apply(ServerConfig.load(configFile)));
-		ServerPlayConnectionEvents.DISCONNECT.register((listener, disconnected) -> games.remove(uuid(listener.player)));
+		ServerPlayConnectionEvents.JOIN.register((listener, sender, joined) -> joinedAt.put(uuid(listener.player), ticks));
+		ServerPlayConnectionEvents.DISCONNECT.register((listener, disconnected) -> {
+			games.remove(uuid(listener.player));
+			joinedAt.remove(uuid(listener.player));
+		});
 		ServerTickEvents.END_SERVER_TICK.register(this::tick);
 		CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> SayItAdminCommand.register(dispatcher, this));
 
 		ServerPlayNetworking.registerGlobalReceiver(SayItPayloads.Hello.TYPE, (payload, context) -> {
 			ServerPlayer player = context.player();
-			games.computeIfAbsent(uuid(player), id -> new PlayerGame()).hello(payload.enabled(), actions(player));
+			// On a server that requires the mod, nobody can opt out.
+			boolean playing = payload.enabled() || config.requireMod;
+			games.computeIfAbsent(uuid(player), id -> new PlayerGame()).hello(playing, actions(player));
 			sendRules(player);
 		});
 		ServerPlayNetworking.registerGlobalReceiver(SayItPayloads.Listening.TYPE, (payload, context) -> {
@@ -98,6 +109,10 @@ public final class SayItServer {
 			PlayerGame game = games.get(uuid(player));
 
 			if (game != null) {
+				if (config.requireMod) {
+					game.hello(true, actions(player));
+				}
+
 				if (newLanguage) {
 					game.reset(actions(player));
 				}
@@ -116,6 +131,7 @@ public final class SayItServer {
 	private void start(MinecraftServer started) {
 		server = started;
 		games.clear();
+		joinedAt.clear();
 		config = ServerConfig.load(configFile);
 		learned = new LearnedStore(started.getWorldPath(LevelResource.DATA).resolve("sayitmc").resolve("learned.json"));
 		learned.load();
@@ -124,7 +140,7 @@ public final class SayItServer {
 	private void tick(MinecraftServer ticking) {
 		ticks++;
 
-		if (learned == null || games.isEmpty()) {
+		if (learned == null) {
 			return;
 		}
 
@@ -135,7 +151,18 @@ public final class SayItServer {
 			UUID id = uuid(player);
 			PlayerGame game = games.get(id);
 
-			if (game == null || !game.isPlaying()) {
+			if (game == null) {
+				// A client with the mod says hello right after joining; one that stays silent does not have it.
+				Long joined = joinedAt.get(id);
+
+				if (config.requireMod && joined != null && ticks - joined > HELLO_TIMEOUT_TICKS) {
+					player.connection.disconnect(Component.literal(config.requireModMessage));
+				}
+
+				continue;
+			}
+
+			if (!game.isPlaying()) {
 				continue;
 			}
 
@@ -151,7 +178,7 @@ public final class SayItServer {
 	}
 
 	private void sendRules(ServerPlayer player) {
-		ServerPlayNetworking.send(player, new SayItPayloads.Rules(config.language, config.secondsToAnswer));
+		ServerPlayNetworking.send(player, new SayItPayloads.Rules(config.language, config.secondsToAnswer, config.requireMod));
 	}
 
 	private PlayerGame.Actions actions(ServerPlayer player) {

@@ -23,6 +23,8 @@ public final class SayItClient implements ClientModInitializer {
 	/** The language the server makes everyone learn; null until its rules arrive. */
 	private static String serverLanguage;
 	private static int serverSeconds;
+	/** The server does not let players turn the game off. */
+	private static boolean serverMandatory;
 
 	@Override
 	public void onInitializeClient() {
@@ -44,6 +46,7 @@ public final class SayItClient implements ClientModInitializer {
 		ClientPlayConnectionEvents.DISCONNECT.register((listener, client) -> {
 			serverGame = false;
 			serverLanguage = null;
+			serverMandatory = false;
 			challenges.clear();
 		});
 		ClientTickEvents.END_CLIENT_TICK.register(client -> challenges.tick(client.player));
@@ -61,9 +64,10 @@ public final class SayItClient implements ClientModInitializer {
 
 		serverLanguage = rules.language();
 		serverSeconds = rules.seconds();
+		serverMandatory = rules.mandatory();
 
 		// Start downloading the speech model now, so it is ready by the first new item.
-		if (ClientConfig.get().enabled) {
+		if (ClientConfig.get().enabled || serverMandatory) {
 			speech.prepare(serverLanguage);
 		}
 	}
@@ -85,6 +89,10 @@ public final class SayItClient implements ClientModInitializer {
 
 	static int serverSeconds() {
 		return serverSeconds;
+	}
+
+	static boolean isMandatory() {
+		return serverGame && serverMandatory;
 	}
 
 	public static SpeechService speech() {

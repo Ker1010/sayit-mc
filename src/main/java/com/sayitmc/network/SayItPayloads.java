@@ -28,7 +28,7 @@ public final class SayItPayloads {
 	}
 
 	/** Bumped when packets change, so mismatched mod versions ignore each other instead of failing to decode. */
-	private static final String PROTOCOL = "v3/";
+	private static final String PROTOCOL = "v4/";
 
 	private static <T extends CustomPacketPayload> CustomPacketPayload.Type<T> payloadType(String path) {
 		return new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(SayItMod.MOD_ID, PROTOCOL + path));
@@ -103,18 +103,22 @@ public final class SayItPayloads {
 		}
 	}
 
-	/** Server -> client: the language everyone learns and the time per word, chosen by the server. */
-	public record Rules(String language, int seconds) implements CustomPacketPayload {
+	/**
+	 * Server -> client: the language everyone learns and the time per word, chosen by the server;
+	 * {@code mandatory} means players cannot turn the game off.
+	 */
+	public record Rules(String language, int seconds, boolean mandatory) implements CustomPacketPayload {
 		public static final Type<Rules> TYPE = payloadType("rules");
 		public static final StreamCodec<FriendlyByteBuf, Rules> CODEC = CustomPacketPayload.codec(Rules::write, Rules::new);
 
 		private Rules(FriendlyByteBuf buf) {
-			this(buf.readUtf(), buf.readVarInt());
+			this(buf.readUtf(), buf.readVarInt(), buf.readBoolean());
 		}
 
 		private void write(FriendlyByteBuf buf) {
 			buf.writeUtf(language);
 			buf.writeVarInt(seconds);
+			buf.writeBoolean(mandatory);
 		}
 
 		@Override

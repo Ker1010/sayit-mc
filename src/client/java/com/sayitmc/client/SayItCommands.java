@@ -44,11 +44,17 @@ final class SayItCommands {
 		}
 
 		source.sendFeedback(Component.literal("This server's language is " + Languages.displayName(language) + " (" + language + "), "
-				+ SayItClient.serverSeconds() + "s per word. You are " + (ClientConfig.get().enabled ? "playing." : "not playing (/sayit on).")));
+				+ SayItClient.serverSeconds() + "s per word. You are " + (ClientConfig.get().enabled || SayItClient.isMandatory()
+				? "playing." : "not playing (/sayit on).")));
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int setEnabled(FabricClientCommandSource source, boolean enabled) {
+		if (!enabled && SayItClient.isMandatory()) {
+			source.sendError(Component.literal("This server requires everyone to play Say It!."));
+			return 0;
+		}
+
 		ClientConfig.get().enabled = enabled;
 		ClientConfig.save();
 

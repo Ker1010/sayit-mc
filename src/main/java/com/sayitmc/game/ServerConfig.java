@@ -28,6 +28,9 @@ public final class ServerConfig {
 	public boolean quizItemsAlreadyInInventory = false;
 	/** How long to wait for a player's speech model to download before giving up on a challenge. */
 	public int waitForClientSeconds = 60;
+	/** Kick players whose client does not have the mod, and do not let anyone turn the game off. */
+	public boolean requireMod = true;
+	public String requireModMessage = "This server plays Say It! Install the Say It! mod (sayit-mc) and Fabric API for Minecraft 26.3 to join.";
 
 	public static ServerConfig load(Path file) {
 		ServerConfig config = new ServerConfig();
@@ -75,5 +78,9 @@ public final class ServerConfig {
 
 		secondsToAnswer = Math.clamp(secondsToAnswer, 3, 120);
 		waitForClientSeconds = Math.clamp(waitForClientSeconds, 5, 600);
+
+		if (requireModMessage == null || requireModMessage.isBlank()) {
+			requireModMessage = new ServerConfig().requireModMessage;
+		}
 	}
 }
