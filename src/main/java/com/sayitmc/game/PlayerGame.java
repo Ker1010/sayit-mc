@@ -148,8 +148,17 @@ public final class PlayerGame {
 		if (running != null && running.id == id && !running.counting) {
 			running.counting = true;
 			running.since = now;
-			running.word = word;
+			running.word = cleanWord(word);
 		}
+	}
+
+	/**
+	 * The word comes from the player's client and is shown to everyone, so a modified client must not be able to
+	 * slip in formatting codes, line breaks or a long message.
+	 */
+	static String cleanWord(String word) {
+		String plain = word.replaceAll("§.?", "").replaceAll("\\p{Cntrl}", "").strip();
+		return plain.length() > 32 ? plain.substring(0, 32) : plain;
 	}
 
 	/** Seconds left on the running countdown, or -1 when nothing is counting down. */

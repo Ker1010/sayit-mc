@@ -29,10 +29,20 @@ public final class Languages {
 		return CODE.matcher(code).matches();
 	}
 
-	/** {@code ja_jp -> JAPANESE}, used in the "SAY IT IN ..." header. */
+	/** {@code ja_jp -> JAPANESE}, used in server messages. */
 	public static String displayName(String code) {
+		return displayName(code, Locale.ENGLISH);
+	}
+
+	/** The language's name in {@code in}: {@code ja_jp -> JAPANESE} in English, {@code 日语} in Chinese. */
+	public static String displayName(String code, Locale in) {
 		String prefix = Romanizer.languagePrefix(code);
-		String name = Locale.forLanguageTag(prefix).getDisplayLanguage(Locale.ENGLISH);
-		return (name.isEmpty() || name.equalsIgnoreCase(prefix) ? code : name).toUpperCase(Locale.ROOT);
+		String name = Locale.forLanguageTag(prefix).getDisplayLanguage(in);
+		return (name.isEmpty() || name.equalsIgnoreCase(prefix) ? code : name).toUpperCase(in);
+	}
+
+	/** {@code zh_cn -> zh-CN} as a Java locale. */
+	public static Locale locale(String code) {
+		return Locale.forLanguageTag(code.replace('_', '-'));
 	}
 }

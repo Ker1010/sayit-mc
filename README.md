@@ -42,7 +42,7 @@ Requirements: Minecraft Java **26.3**, Fabric Loader **0.19.3+**, [Fabric API](h
 
 | Where | What happens |
 | --- | --- |
-| **Server** | Put the jar and Fabric API in the server's `mods` folder **and** in every player's `mods` folder. By default (`requireMod`) players without the mod are kicked with a message telling them to install it; turn it off to let them join and sit the game out. |
+| **Server** | Put the jar and Fabric API in the server's `mods` folder **and** in every player's `mods` folder. Players without the mod can join and sit the game out; set `requireMod` to kick them with a message telling them to install it. |
 | **Singleplayer** | Put the jar and Fabric API in `.minecraft/mods`. Your game acts as the server, so the language comes from your `config/sayitmc-server.json`. |
 | **Server without the mod** | Nothing happens; the language has to come from a server running the mod. |
 
@@ -90,7 +90,7 @@ Server rules — `config/sayitmc-server.json` on the server (or your own game fo
 | `waitForClientSeconds` | `60` | How long to wait for a player's speech model download |
 | `rememberStashedItemsMinutes` | `30` | How long an item whose time ran out while stashed away stays marked for clearing |
 | `showChallengeAboveHead` | `true` | Show the word and countdown after the player's name (`Steve [小麦 7s]`) |
-| `requireMod` | `true` | Kick players who join without the mod, and nobody can use `/sayit off` |
+| `requireMod` | `false` | Kick players who join without the mod, and nobody can use `/sayit off` |
 | `requireModMessage` | | The message those players see when kicked |
 
 Learned items are saved per player in the world folder: `data/sayitmc/learned.json`.
@@ -137,3 +137,8 @@ The jar is written to `build/libs/`. GitHub Actions builds it on every push (*Ac
 `sayit-mc`). Publishing a release on GitHub (*Releases* → *Draft a new release* → tag `v0.3.0`), or pushing a `v*` tag,
 attaches the jar to that release.
 Unit tests for the game rules, romanizer and answer matching: `./gradlew test`.
+
+## License
+
+Say It! is MIT licensed (`LICENSE`). The bundled Vosk, ICU4J and Kuromoji libraries keep their own licenses, see
+[`licenses/THIRD_PARTY_NOTICES.md`](licenses/THIRD_PARTY_NOTICES.md).

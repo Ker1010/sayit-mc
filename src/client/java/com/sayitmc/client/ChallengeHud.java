@@ -55,7 +55,8 @@ public final class ChallengeHud {
 		Font font = Minecraft.getInstance().font;
 		Challenge.Phase phase = challenge.phase();
 		boolean quiz = phase == Challenge.Phase.QUIZ;
-		String language = Languages.displayName(challenge.languageCode);
+		String language = Languages.displayName(challenge.languageCode,
+				Languages.locale(Minecraft.getInstance().getLanguageManager().getSelected()));
 		String header = I18n.get(quiz ? "sayitmc.hud.quiz_header" : "sayitmc.hud.header", language);
 		String timer = phase == Challenge.Phase.LISTENING || quiz ? challenge.secondsLeft(now) + "s" : "";
 		List<String> choices = quiz ? quizLines(challenge) : List.of();

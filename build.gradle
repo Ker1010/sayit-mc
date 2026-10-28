@@ -70,4 +70,9 @@ jar {
 	from("LICENSE") {
 		rename { "${it}_$projectName" }
 	}
+
+	// Licenses of the bundled libraries (Vosk, ICU4J, Kuromoji).
+	from("licenses") {
+		into "META-INF/licenses/$projectName"
+	}
 }

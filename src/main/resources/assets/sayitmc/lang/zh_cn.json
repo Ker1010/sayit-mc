@@ -1,0 +1,20 @@
+{
+	"sayitmc.hud.header": "用%s说出来",
+	"sayitmc.hud.listening": "聆听中…（按 %s 清除）",
+	"sayitmc.hud.heard": "听到：%s",
+	"sayitmc.hud.correct": "✔ 正确！",
+	"sayitmc.hud.timeout": "✘ 时间到！",
+	"sayitmc.hud.downloading": "正在下载语音模型 %s%%",
+	"sayitmc.hud.loading": "正在加载语音模型…",
+	"sayitmc.hud.flashcard": "无法检查语音：%s",
+	"sayitmc.hud.cleared": "✘ 时间到！物品已清除",
+	"sayitmc.hud.dropped": "已丢弃，计时重置",
+	"key.category.sayitmc.main": "Say It!",
+	"key.sayitmc.clear_heard": "清除识别错误的字",
+	"sayitmc.hud.quiz_header": "选出正确的%s",
+	"sayitmc.hud.quiz": "没有麦克风：按 %s / %s / %s",
+	"sayitmc.hud.wrong": "✘ 选错了！",
+	"key.sayitmc.answer_1": "选择题答案 1",
+	"key.sayitmc.answer_2": "选择题答案 2",
+	"key.sayitmc.answer_3": "选择题答案 3"
+}

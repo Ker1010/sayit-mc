@@ -40,7 +40,7 @@ public final class ServerConfig {
 	/** Show the word and countdown above the challenged player's head, for everyone to see. */
 	public boolean showChallengeAboveHead = true;
 	/** Kick players whose client does not have the mod, and do not let anyone turn the game off. */
-	public boolean requireMod = true;
+	public boolean requireMod = false;
 	public String requireModMessage = "This server plays Say It! Install the Say It! mod (sayit-mc) and Fabric API for Minecraft 26.3 to join.";
 
 	public static ServerConfig load(Path file) {

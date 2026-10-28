@@ -140,6 +140,13 @@ class PlayerGameTest {
 	}
 
 	@Test
+	void wordFromTheClientIsCleanedBeforeEveryoneSeesIt() {
+		assertEquals("小麦", PlayerGame.cleanWord("§c小麦"));
+		assertEquals("ab", PlayerGame.cleanWord("a\nb"));
+		assertEquals(32, PlayerGame.cleanWord("x".repeat(100)).length());
+	}
+
+	@Test
 	void wrongQuizAnswerClearsRightAway() {
 		tick("minecraft:wheat");
 		game.listening(1, now, "Weizen");

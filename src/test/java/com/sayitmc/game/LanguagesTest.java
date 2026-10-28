@@ -27,5 +27,6 @@ class LanguagesTest {
 	void displayNames() {
 		assertEquals("JAPANESE", Languages.displayName("ja_jp"));
 		assertEquals("GERMAN", Languages.displayName("de_de"));
+		assertEquals("日语", Languages.displayName("ja_jp", Languages.locale("zh_cn")));
 	}
 }
