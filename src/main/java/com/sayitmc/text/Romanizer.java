@@ -116,6 +116,31 @@ public final class Romanizer {
 		return List.copyOf(phrases);
 	}
 
+	/**
+	 * How a Japanese word with kanji is read, in kana ({@code 小麦 -> こむぎ}, {@code ダイヤモンドの剣 -> ダイヤモンドのけん}),
+	 * or {@code null} for other languages and words without kanji.
+	 */
+	public static String kanaReading(String text, String languageCode) {
+		if (!languagePrefix(languageCode).equals("ja") || text.codePoints().noneMatch(Romanizer::isKanji)) {
+			return null;
+		}
+
+		Transliterator toHiragana = transliterator("Katakana-Hiragana");
+		StringBuilder kana = new StringBuilder();
+
+		for (Token token : japaneseTokenizer().tokenize(text)) {
+			String reading = token.getReading();
+			boolean hasKanji = token.getSurface().codePoints().anyMatch(Romanizer::isKanji);
+			kana.append(hasKanji && reading != null && !reading.equals("*") ? toHiragana.transliterate(reading) : token.getSurface());
+		}
+
+		return kana.toString();
+	}
+
+	private static boolean isKanji(int codePoint) {
+		return Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN;
+	}
+
 	/** {@code ja_jp -> ja}, {@code zh_tw -> zh}. */
 	public static String languagePrefix(String languageCode) {
 		int underscore = languageCode.indexOf('_');

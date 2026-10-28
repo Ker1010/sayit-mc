@@ -82,6 +82,12 @@ final class SayItCommands {
 			return 0;
 		}
 
+		// Without speech, practice would become a free quiz to try the answers of the real one.
+		if (!SayItClient.speech().canListen()) {
+			source.sendError(Component.literal("Practice needs a working microphone and speech model."));
+			return 0;
+		}
+
 		if (!SayItClient.challenges().practice(held, language, SayItClient.serverSeconds())) {
 			source.sendError(Component.literal("Finish the current word first."));
 			return 0;

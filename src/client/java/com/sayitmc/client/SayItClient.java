@@ -44,7 +44,7 @@ public final class SayItClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(SayItPayloads.Rules.TYPE, (payload, context) -> applyRules(payload));
 		ClientPlayNetworking.registerGlobalReceiver(SayItPayloads.Challenge.TYPE, (payload, context) -> challenges.serverChallenge(payload));
 		ClientPlayNetworking.registerGlobalReceiver(SayItPayloads.Result.TYPE,
-				(payload, context) -> challenges.serverResult(payload.id(), Outcome.byId(payload.outcome())));
+				(payload, context) -> challenges.serverResult(payload.id(), Outcome.byId(payload.outcome()), payload.reveal()));
 
 		ClientPlayConnectionEvents.JOIN.register((listener, sender, client) -> {
 			serverGame = ClientPlayNetworking.canSend(SayItPayloads.Hello.TYPE);

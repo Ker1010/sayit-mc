@@ -35,6 +35,9 @@ import com.sayitmc.network.SayItPayloads;
 public final class SayItServer {
 	private final Path configFile = FabricLoader.getInstance().getConfigDir().resolve("sayitmc-server.json");
 	private final Map<UUID, PlayerGame> games = new HashMap<>();
+	/** Games of players who logged out, kept so overdue items are still cleared when they come back. */
+	private final Map<UUID, PlayerGame> departed = new HashMap<>();
+	private final Map<UUID, Long> departedAt = new HashMap<>();
 	private final NameTags nameTags = new NameTags();
 	/** When each online player joined, to find the ones whose client never says hello. */
 	private final Map<UUID, Long> joinedAt = new HashMap<>();
@@ -46,6 +49,7 @@ public final class SayItServer {
 
 	private ServerConfig config = new ServerConfig();
 	private LearnedStore learned;
+	private MissCounts misses;
 	private MinecraftServer server;
 	private long ticks;
 
@@ -60,9 +64,18 @@ public final class SayItServer {
 		ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((reloaded, resourceManager, success) -> apply(ServerConfig.load(configFile)));
 		ServerPlayConnectionEvents.JOIN.register((listener, sender, joined) -> joinedAt.put(uuid(listener.player), ticks));
 		ServerPlayConnectionEvents.DISCONNECT.register((listener, disconnected) -> {
-			games.remove(uuid(listener.player));
+			UUID id = uuid(listener.player);
+			PlayerGame game = games.remove(id);
+
+			// Logging out does not dodge a word that is counting down.
+			if (game != null) {
+				game.forfeit(ticks, config);
+				departed.put(id, game);
+				departedAt.put(id, ticks);
+			}
+
 			nameTags.forget(server, listener.player);
-			joinedAt.remove(uuid(listener.player));
+			joinedAt.remove(id);
 		});
 		ServerTickEvents.END_SERVER_TICK.register(this::tick);
 		ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
@@ -76,7 +89,8 @@ public final class SayItServer {
 			ServerPlayer player = context.player();
 			// On a server that requires the mod, nobody can opt out.
 			boolean playing = payload.enabled() || config.requireMod;
-			games.computeIfAbsent(uuid(player), id -> new PlayerGame()).hello(playing, actions(player));
+			PlayerGame game = games.computeIfAbsent(uuid(player), this::returningGame);
+			game.hello(playing, heldItems(player).contains(game.runningItem()), ticks, config, actions(player));
 			sendRules(player);
 		});
 		ServerPlayNetworking.registerGlobalReceiver(SayItPayloads.Listening.TYPE, (payload, context) -> {
@@ -126,11 +140,11 @@ public final class SayItServer {
 
 			if (game != null) {
 				if (config.requireMod) {
-					game.hello(true, actions(player));
+					game.hello(true, false, ticks, config, actions(player));
 				}
 
 				if (newLanguage) {
-					game.reset(actions(player));
+					game.resetAll(actions(player));
 				}
 
 				sendRules(player);
@@ -147,11 +161,15 @@ public final class SayItServer {
 	private void start(MinecraftServer started) {
 		server = started;
 		games.clear();
+		departed.clear();
+		departedAt.clear();
 		nameTags.removeAll(started);
 		joinedAt.clear();
 		config = ServerConfig.load(configFile);
 		learned = new LearnedStore(started.getWorldPath(LevelResource.DATA).resolve("sayitmc").resolve("learned.json"));
 		learned.load();
+		misses = new MissCounts(started.getWorldPath(LevelResource.DATA).resolve("sayitmc").resolve("misses.json"));
+		misses.load();
 	}
 
 	private void tick(MinecraftServer ticking) {
@@ -180,13 +198,15 @@ public final class SayItServer {
 			}
 
 			if (!game.isPlaying()) {
+				nameTags.set(ticking, player, null);
 				continue;
 			}
 
-			// Creative players get every item for free, so by default they sit the game out; their inventory
-			// on returning to survival becomes the new baseline instead of a flood of challenges.
+			// Creative players get every item for free, so by default they sit the game out (a word that was
+			// counting down is given up); their inventory on returning to survival becomes the new baseline.
 			if (isCreative(player) && !config.includeCreativePlayers) {
-				game.reset(actions(player));
+				game.sitOut(heldItems(player).contains(game.runningItem()), ticks, config, actions(player));
+				nameTags.update(ticking, player, game, ticks, config);
 				continue;
 			}
 
@@ -201,6 +221,26 @@ public final class SayItServer {
 		}
 
 		droppedThisTick.clear();
+
+		if (ticks % 1200 == 0) {
+			long keep = config.rememberStashedItemsMinutes * 60L * 20L;
+			departedAt.entrySet().removeIf(entry -> {
+				boolean expired = ticks - entry.getValue() > keep;
+
+				if (expired) {
+					departed.remove(entry.getKey());
+				}
+
+				return expired;
+			});
+		}
+	}
+
+	/** The game of a player coming back within {@code rememberStashedItemsMinutes}, or a new one. */
+	private PlayerGame returningGame(UUID id) {
+		departedAt.remove(id);
+		PlayerGame game = departed.remove(id);
+		return game != null ? game : new PlayerGame();
 	}
 
 	private void noticeDrop(ItemEntity item) {
@@ -217,6 +257,25 @@ public final class SayItServer {
 		}
 	}
 
+	/** Keeps count of misses per item; true when this miss should show the answer. */
+	private boolean countMiss(Entity player, String itemId, Outcome outcome) {
+		if (misses == null) {
+			return false;
+		}
+
+		return switch (outcome) {
+			case CLEARED, TIMED_OUT -> {
+				int total = misses.add(uuid(player), config.language, itemId);
+				yield config.revealAnswerAfterMisses > 0 && total >= config.revealAnswerAfterMisses;
+			}
+			case CORRECT -> {
+				misses.clear(uuid(player), config.language, itemId);
+				yield false;
+			}
+			default -> false;
+		};
+	}
+
 	private void sendRules(ServerPlayer player) {
 		ServerPlayNetworking.send(player, new SayItPayloads.Rules(config.language, config.secondsToAnswer, config.requireMod,
 				(int) Math.round(config.matchThreshold * 100), (int) Math.round(config.minConfidence * 100)));
@@ -230,8 +289,8 @@ public final class SayItServer {
 			}
 
 			@Override
-			public void endChallenge(int id, Outcome outcome) {
-				ServerPlayNetworking.send(player, new SayItPayloads.Result(id, outcome.ordinal()));
+			public void endChallenge(int id, String itemId, Outcome outcome) {
+				ServerPlayNetworking.send(player, new SayItPayloads.Result(id, outcome.ordinal(), countMiss(player, itemId, outcome)));
 				nameTags.flash(player, outcome, ticks);
 			}
 

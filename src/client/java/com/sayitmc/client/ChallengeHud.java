@@ -55,12 +55,17 @@ public final class ChallengeHud {
 		Font font = Minecraft.getInstance().font;
 		Challenge.Phase phase = challenge.phase();
 		boolean quiz = phase == Challenge.Phase.QUIZ;
+		boolean revealed = challenge.revealed();
+		// After a quiz the answer stays hidden, unless it was picked or the server allows showing it.
+		boolean showOptions = challenge.wasQuiz() && phase != Challenge.Phase.CORRECT && !revealed;
 		String language = Languages.displayName(challenge.languageCode,
 				Languages.locale(Minecraft.getInstance().getLanguageManager().getSelected()));
-		String header = I18n.get(quiz ? "sayitmc.hud.quiz_header" : "sayitmc.hud.header", language);
+		String headerKey = revealed ? "sayitmc.hud.answer_header" : showOptions ? "sayitmc.hud.quiz_header" : "sayitmc.hud.header";
+		String header = I18n.get(headerKey, language);
 		String timer = phase == Challenge.Phase.LISTENING || quiz ? challenge.secondsLeft(now) + "s" : "";
-		List<String> choices = quiz ? quizLines(challenge) : List.of();
-		String subtitle = challenge.subtitle == null ? null : "(" + challenge.subtitle + ")";
+		List<String> choices = showOptions ? quizLines(challenge) : List.of();
+		String reading = revealed ? challenge.answerReading() : challenge.subtitle;
+		String subtitle = reading == null ? null : "(" + reading + ")";
 		int accent = accentColor(phase);
 
 		int maxTextWidth = Math.max(80, graphics.guiWidth() - 2 * MARGIN - TEXT_LEFT - PADDING_RIGHT);
@@ -86,7 +91,7 @@ public final class ChallengeHud {
 		int width = TEXT_LEFT + textWidth + PADDING_RIGHT;
 		int wordTop = 20;
 		int subtitleTop = wordTop + Math.round(LINE_HEIGHT * wordScale) + 2;
-		int barTop = quiz
+		int barTop = showOptions
 				? wordTop + choices.size() * (LINE_HEIGHT + 3) + 1
 				: subtitle == null ? subtitleTop + 1 : subtitleTop + LINE_HEIGHT + 3;
 		int statusTop = barTop + 7;
@@ -112,12 +117,13 @@ public final class ChallengeHud {
 			text(graphics, font, timer, textX + textWidth - width(font, timer), y + 7, WHITE);
 		}
 
-		if (quiz) {
+		if (showOptions) {
 			for (int i = 0; i < choices.size(); i++) {
-				text(graphics, font, fit(font, choices.get(i), textWidth), textX, y + wordTop + i * (LINE_HEIGHT + 3), GOLD);
+				text(graphics, font, fit(font, choices.get(i), textWidth), textX, y + wordTop + i * (LINE_HEIGHT + 3), quiz ? GOLD : MUTED);
 			}
 		} else {
-			int wordColor = phase == Challenge.Phase.CORRECT ? GREEN : phase == Challenge.Phase.WRONG ? RED : GOLD;
+			int wordColor = phase == Challenge.Phase.CORRECT ? GREEN
+					: revealed || phase == Challenge.Phase.WRONG ? RED : GOLD;
 			graphics.pose().pushMatrix();
 			graphics.pose().translate(textX, y + wordTop);
 			graphics.pose().scale(wordScale);
@@ -125,7 +131,7 @@ public final class ChallengeHud {
 			graphics.pose().popMatrix();
 		}
 
-		if (subtitle != null && !quiz) {
+		if (subtitle != null && !showOptions) {
 			text(graphics, font, subtitle, textX, y + subtitleTop, LIGHT);
 		}
 

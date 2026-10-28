@@ -17,6 +17,8 @@ A Fabric mod for **Minecraft Java 26.3**. Every time you get an item you have no
 - **Say it before the timer hits 0** → level-up sound, the item is learned and never asked again.
 - **Timer hits 0** → the item is **cleared** from your inventory. Pick it up again to get another try.
 - **Drop the item on the ground** (or die) → its **timer resets**. When you pick it up again you get a fresh timer.
+- Miss the same item 3 times and the card shows you the answer and how to say it (in kana and romaji for Japanese).
+- Logging out or turning the game off in the middle of a word counts as missing it.
 - Putting it in a chest, a bundle or the crafting grid does **not** help: the timer keeps running, and if it runs out
   the item is cleared the moment it comes back into your inventory.
 - One word at a time; other new items wait their turn.
@@ -88,6 +90,7 @@ Server rules — `config/sayitmc-server.json` on the server (or your own game fo
 | `includeCreativePlayers` | `false` | Also play in creative mode |
 | `quizItemsAlreadyInInventory` | `false` | Also ask for what players carry when they join |
 | `waitForClientSeconds` | `60` | How long to wait for a player's speech model download |
+| `revealAnswerAfterMisses` | `3` | After missing the same item this many times, the miss shows the answer and how to say it (0 = never) |
 | `rememberStashedItemsMinutes` | `30` | How long an item whose time ran out while stashed away stays marked for clearing |
 | `showChallengeAboveHead` | `true` | Show the word and countdown after the player's name (`Steve [小麦 7s]`) |
 | `requireMod` | `false` | Kick players who join without the mod, and nobody can use `/sayit off` |

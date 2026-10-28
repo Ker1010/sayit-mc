@@ -31,7 +31,7 @@ public final class SayItPayloads {
 	private static final int MAX_WORD_LENGTH = 64;
 
 	/** Bumped when packets change, so mismatched mod versions ignore each other instead of failing to decode. */
-	private static final String PROTOCOL = "v7/";
+	private static final String PROTOCOL = "v8/";
 
 	private static <T extends CustomPacketPayload> CustomPacketPayload.Type<T> payloadType(String path) {
 		return new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(SayItMod.MOD_ID, PROTOCOL + path));
@@ -156,18 +156,22 @@ public final class SayItPayloads {
 		}
 	}
 
-	/** Server -> client: how the challenge ended, see {@link com.sayitmc.game.Outcome}. */
-	public record Result(int id, int outcome) implements CustomPacketPayload {
+	/**
+	 * Server -> client: how the challenge ended, see {@link com.sayitmc.game.Outcome}. {@code reveal} lets the
+	 * client show the answer: the player has missed this item often enough.
+	 */
+	public record Result(int id, int outcome, boolean reveal) implements CustomPacketPayload {
 		public static final Type<Result> TYPE = payloadType("result");
 		public static final StreamCodec<FriendlyByteBuf, Result> CODEC = CustomPacketPayload.codec(Result::write, Result::new);
 
 		private Result(FriendlyByteBuf buf) {
-			this(buf.readVarInt(), buf.readVarInt());
+			this(buf.readVarInt(), buf.readVarInt(), buf.readBoolean());
 		}
 
 		private void write(FriendlyByteBuf buf) {
 			buf.writeVarInt(id);
 			buf.writeVarInt(outcome);
+			buf.writeBoolean(reveal);
 		}
 
 		@Override

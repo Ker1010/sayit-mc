@@ -25,7 +25,7 @@ class PlayerGameTest {
 		}
 
 		@Override
-		public void endChallenge(int id, Outcome outcome) {
+		public void endChallenge(int id, String itemId, Outcome outcome) {
 			log.add("end " + id + " " + outcome);
 		}
 
@@ -44,7 +44,7 @@ class PlayerGameTest {
 
 	@BeforeEach
 	void join() {
-		game.hello(true, actions);
+		game.hello(true, false, now, config, actions);
 		tick("minecraft:dirt");
 	}
 
@@ -186,11 +186,46 @@ class PlayerGameTest {
 	}
 
 	@Test
-	void turningTheGameOffCancelsAndStopsAsking() {
+	void turningTheGameOffBeforeTheClockStartsJustStops() {
 		tick("minecraft:wheat");
-		game.hello(false, actions);
+		game.hello(false, true, now, config, actions);
 		tick("minecraft:wheat", "minecraft:bread");
 		assertEquals(List.of("start 1 minecraft:wheat 10", "end 1 CANCELLED"), log);
+	}
+
+	@Test
+	void turningTheGameOffMidWordGivesItUp() {
+		tick("minecraft:wheat");
+		game.listening(1, now, "Weizen");
+		game.hello(false, true, now, config, actions);
+		assertEquals(List.of("start 1 minecraft:wheat 10", "clear minecraft:wheat", "end 1 CLEARED"), log);
+	}
+
+	@Test
+	void loggingOutMidWordClearsTheItemOnReturn() {
+		tick("minecraft:wheat");
+		game.listening(1, now, "Weizen");
+		game.forfeit(now, config);
+
+		// Back on the server with the item still in the inventory: the first tick takes a baseline.
+		game.hello(true, true, now, config, actions);
+		tick("minecraft:wheat");
+		assertEquals(List.of("start 1 minecraft:wheat 10", "clear stashed minecraft:wheat"), log);
+	}
+
+	@Test
+	void queuedItemUsedUpBeforeItsTurnIsNotPunished() {
+		tick("minecraft:wheat", "minecraft:bread");
+		String first = log.getFirst().split(" ")[2];
+		String second = first.equals("minecraft:wheat") ? "minecraft:bread" : "minecraft:wheat";
+
+		tick(first);
+		tick(first, second);
+		assertEquals(1, log.size(), "eaten while queued, then picked up again: just asked again later, not cleared");
+
+		game.answer(1, Verdict.CORRECT, true, learned::add, now, config, actions);
+		tick(first, second);
+		assertEquals("start 2 " + second + " 10", log.get(2));
 	}
 
 	@Test

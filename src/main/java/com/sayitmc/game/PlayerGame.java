@@ -18,7 +18,7 @@ public final class PlayerGame {
 	public interface Actions {
 		void startChallenge(int id, String itemId, int seconds);
 
-		void endChallenge(int id, Outcome outcome);
+		void endChallenge(int id, String itemId, Outcome outcome);
 
 		void clearItem(String itemId);
 
@@ -55,13 +55,44 @@ public final class PlayerGame {
 		}
 	}
 
-	/** The client has the mod; {@code enabled} is whether this player plays. */
-	public void hello(boolean enabled, Actions actions) {
+	/**
+	 * The client has the mod; {@code enabled} is whether this player plays. Turning the game off while a word is
+	 * counting down gives that word up, so it cannot be used to dodge a word that is about to be missed.
+	 *
+	 * @param itemHeld whether the running challenge's item is in the inventory right now
+	 */
+	public void hello(boolean enabled, boolean itemHeld, long now, ServerConfig config, Actions actions) {
 		if (!enabled) {
-			reset(actions);
+			sitOut(itemHeld, now, config, actions);
 		}
 
 		this.enabled = enabled;
+	}
+
+	/**
+	 * The player stops playing for now (turned the game off, or went into creative mode): a word that is counting
+	 * down is given up as if its time ran out, the rest starts over afterwards.
+	 */
+	public void sitOut(boolean itemHeld, long now, ServerConfig config, Actions actions) {
+		if (running != null && running.counting) {
+			timeUp(itemHeld, now, config, actions);
+		}
+
+		reset(actions);
+	}
+
+	/**
+	 * The player left while a word was counting down: it is marked like a stashed item, so it is cleared when
+	 * they come back with it instead of being forgotten. Nothing is sent, the player is gone.
+	 */
+	public void forfeit(long now, ServerConfig config) {
+		if (running != null && running.counting) {
+			stash(running.itemId, now, config);
+		}
+
+		running = null;
+		queue.clear();
+		previous = null;
 	}
 
 	/** The item of the running challenge, or null. */
@@ -101,22 +132,23 @@ public final class PlayerGame {
 					if (dropped) {
 						finish(Outcome.DROPPED, actions);
 					}
-				} else if (queue.remove(id) && !dropped) {
-					stash(id, now, config);
+				} else {
+					// Its timer never started, so eating or placing it before its turn is fine.
+					queue.remove(id);
 				}
 			}
 		}
 
 		for (String id : held) {
-			boolean isNew = baseline ? config.quizItemsAlreadyInInventory : !previous.contains(id);
-
-			if (!isNew || isRunning(id)) {
+			// Overdue and back in the inventory (from a chest, or after logging out with it): clear it.
+			if (stashedOverdue.remove(id) != null) {
+				actions.clearStashedItem(id);
 				continue;
 			}
 
-			if (stashedOverdue.remove(id) != null) {
-				actions.clearStashedItem(id);
-			} else if (!learned.test(id) && !queue.contains(id) && queue.size() < MAX_QUEUED) {
+			boolean isNew = baseline ? config.quizItemsAlreadyInInventory : !previous.contains(id);
+
+			if (isNew && !isRunning(id) && !learned.test(id) && !queue.contains(id) && queue.size() < MAX_QUEUED) {
 				queue.add(id);
 			}
 		}
@@ -198,15 +230,23 @@ public final class PlayerGame {
 		}
 	}
 
-	/** Drops the running challenge and the queue; the current inventory becomes the new baseline. */
+	/**
+	 * Drops the running challenge and the queue; the current inventory becomes the new baseline. Overdue items stay
+	 * marked, so a reset (turning off, a creative-mode detour) does not wash them clean.
+	 */
 	public void reset(Actions actions) {
 		if (running != null) {
 			finish(Outcome.CANCELLED, actions);
 		}
 
 		queue.clear();
-		stashedOverdue.clear();
 		previous = null;
+	}
+
+	/** Forgets overdue items too, for a new language (they belonged to the old one's words). */
+	public void resetAll(Actions actions) {
+		reset(actions);
+		stashedOverdue.clear();
 	}
 
 	/** Time ran out (or the quiz answer was wrong): the item is cleared, now or when it comes back. */
@@ -237,8 +277,8 @@ public final class PlayerGame {
 	}
 
 	private void finish(Outcome outcome, Actions actions) {
-		int id = running.id;
+		Running ended = running;
 		running = null;
-		actions.endChallenge(id, outcome);
+		actions.endChallenge(ended.id, ended.itemId, outcome);
 	}
 }

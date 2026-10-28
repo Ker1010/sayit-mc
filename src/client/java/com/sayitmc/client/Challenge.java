@@ -2,6 +2,7 @@ package com.sayitmc.client;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 
@@ -59,6 +60,8 @@ public final class Challenge {
 	private static final long CHECK_GRACE_MILLIS = 1500;
 	/** In the server game, give up waiting for the server's verdict after this long. */
 	private static final long SERVER_VERDICT_MILLIS = 5000;
+	/** A speech model that is not ready after this long turns the word into the quiz. */
+	private static final long PREPARING_LIMIT_MILLIS = 15_000;
 
 	/** Server challenge id, or {@link #PRACTICE}. */
 	public final int serverId;
@@ -82,6 +85,8 @@ public final class Challenge {
 	private String note = "";
 	private List<String> options = List.of();
 	private List<String> optionSubtitles = List.of();
+	/** The server allows showing the answer: this item has been missed often enough. */
+	private boolean revealed;
 
 	private Challenge(int serverId, ItemStack stack, String itemId, String languageCode, String word, long answerMillis) {
 		this.serverId = serverId;
@@ -122,6 +127,9 @@ public final class Challenge {
 					opening = speech.listen(wordList(), SayItClient.minConfidence());
 				} else if (speech.state() == SpeechService.State.UNAVAILABLE) {
 					startQuiz(speech.problem(), now);
+				} else if (now - phaseStart > PREPARING_LIMIT_MILLIS) {
+					// A slow download must not stall the word until the server gives up on it.
+					startQuiz("speech model still downloading", now);
 				}
 			}
 			case LISTENING -> {
@@ -162,9 +170,10 @@ public final class Challenge {
 		}
 	}
 
-	/** The server's verdict for a server challenge. */
-	void serverResult(Outcome outcome, long now) {
+	/** The server's verdict for a server challenge; {@code reveal} lets this miss show the answer. */
+	void serverResult(Outcome outcome, boolean reveal, long now) {
 		closeSession();
+		revealed = reveal && (outcome == Outcome.CLEARED || outcome == Outcome.TIMED_OUT);
 
 		switch (outcome) {
 			case CORRECT -> {
@@ -250,6 +259,26 @@ public final class Challenge {
 		return note;
 	}
 
+	/** The card was a quiz, so the answer must stay hidden unless it was picked or {@link #revealed()}. */
+	public boolean wasQuiz() {
+		return !options.isEmpty();
+	}
+
+	public boolean revealed() {
+		return revealed;
+	}
+
+	/** How to say the answer, shown with it when revealed: {@code こむぎ · komugi}. */
+	public String answerReading() {
+		String kana = Romanizer.kanaReading(word, languageCode);
+
+		if (kana == null) {
+			return subtitle;
+		}
+
+		return subtitle == null ? kana : kana + " · " + subtitle;
+	}
+
 	public List<String> options() {
 		return options;
 	}
@@ -331,14 +360,22 @@ public final class Challenge {
 
 	/** Without speech the player picks the word from three; the server clock starts now. */
 	private void startQuiz(String reason, long now) {
+		// The quiz's answer must not show up above the player's head or in their own player list.
 		if (switchToQuiz(reason, now, now) && isServerGame()) {
-			ClientPlayNetworking.send(new SayItPayloads.Listening(serverId, word));
+			ClientPlayNetworking.send(new SayItPayloads.Listening(serverId, "?"));
 		}
 	}
 
 	/** Shows the quiz, keeping the clock that started at {@code clockStart}; false if it fell back to a flashcard. */
 	private boolean switchToQuiz(String reason, long clockStart, long now) {
-		List<String> picks = QuizOptions.build(word, languageCode, new Random());
+		// Practice would let the player try options without losing anything, so it only runs with speech.
+		if (!isServerGame()) {
+			note = reason;
+			over = true;
+			return false;
+		}
+
+		List<String> picks = QuizOptions.build(word, languageCode, quizRandom());
 
 		if (picks == null) {
 			showFlashcard(reason, now);
@@ -356,6 +393,16 @@ public final class Challenge {
 		note = reason;
 		enter(Phase.QUIZ, clockStart);
 		return true;
+	}
+
+	/**
+	 * The same options in the same order every time this player gets this item, so dropping and picking it up again
+	 * cannot reveal the answer as the one option that is always there.
+	 */
+	private Random quizRandom() {
+		Entity player = Minecraft.getInstance().player;
+		String who = player == null ? "" : player.getUUID().toString();
+		return new Random(Objects.hash(who, itemId, languageCode));
 	}
 
 	private void showFlashcard(String reason, long now) {
